@@ -1,0 +1,375 @@
+-- CreateEnum
+CREATE TYPE "RoleName" AS ENUM ('admin', 'receiver', 'master', 'manager');
+
+-- CreateEnum
+CREATE TYPE "ClientType" AS ENUM ('individual', 'company');
+
+-- CreateEnum
+CREATE TYPE "DeviceType" AS ENUM ('phone', 'tablet', 'laptop', 'pc', 'other');
+
+-- CreateEnum
+CREATE TYPE "OrderStatus" AS ENUM ('new', 'accepted', 'in_diagnostics', 'waiting_approval', 'in_progress', 'ready', 'issued', 'cancelled');
+
+-- CreateEnum
+CREATE TYPE "FileEntityType" AS ENUM ('order', 'device');
+
+-- CreateEnum
+CREATE TYPE "DocumentType" AS ENUM ('receipt', 'act', 'warranty');
+
+-- CreateTable
+CREATE TABLE "users" (
+    "id" TEXT NOT NULL,
+    "login" TEXT NOT NULL,
+    "password_hash" TEXT NOT NULL,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "users_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "roles" (
+    "id" TEXT NOT NULL,
+    "name" "RoleName" NOT NULL,
+    "description" TEXT,
+
+    CONSTRAINT "roles_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "user_roles" (
+    "id" TEXT NOT NULL,
+    "user_id" TEXT NOT NULL,
+    "role_id" TEXT NOT NULL,
+
+    CONSTRAINT "user_roles_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "clients" (
+    "id" TEXT NOT NULL,
+    "client_type" "ClientType" NOT NULL,
+    "full_name" TEXT NOT NULL,
+    "phone" TEXT NOT NULL,
+    "phone_extra" TEXT,
+    "email" TEXT,
+    "comment" TEXT,
+    "created_by" TEXT NOT NULL,
+    "updated_by" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
+
+    CONSTRAINT "clients_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "devices" (
+    "id" TEXT NOT NULL,
+    "client_id" TEXT NOT NULL,
+    "device_type" "DeviceType" NOT NULL,
+    "brand" TEXT NOT NULL,
+    "model" TEXT NOT NULL,
+    "modification" TEXT,
+    "color" TEXT,
+    "imei" TEXT,
+    "serial_number" TEXT,
+    "condition_description" TEXT,
+    "included_items" TEXT,
+    "access_code" TEXT,
+    "comment" TEXT,
+    "created_by" TEXT NOT NULL,
+    "updated_by" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
+
+    CONSTRAINT "devices_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "repair_orders" (
+    "id" TEXT NOT NULL,
+    "order_number" TEXT NOT NULL,
+    "client_id" TEXT NOT NULL,
+    "device_id" TEXT NOT NULL,
+    "receiver_user_id" TEXT NOT NULL,
+    "master_user_id" TEXT,
+    "status" "OrderStatus" NOT NULL,
+    "issue_description" TEXT NOT NULL,
+    "condition_at_acceptance" TEXT NOT NULL,
+    "included_items" TEXT,
+    "estimated_price" DECIMAL(10,2),
+    "estimated_ready_at" TIMESTAMP(3),
+    "receiver_comment" TEXT,
+    "master_comment" TEXT,
+    "issued_at" TIMESTAMP(3),
+    "issued_by" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
+
+    CONSTRAINT "repair_orders_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "repair_order_status_history" (
+    "id" TEXT NOT NULL,
+    "order_id" TEXT NOT NULL,
+    "from_status" "OrderStatus",
+    "to_status" "OrderStatus" NOT NULL,
+    "changed_by" TEXT NOT NULL,
+    "comment" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "repair_order_status_history_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "order_comments" (
+    "id" TEXT NOT NULL,
+    "order_id" TEXT NOT NULL,
+    "user_id" TEXT NOT NULL,
+    "comment_text" TEXT NOT NULL,
+    "is_internal" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "order_comments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "files" (
+    "id" TEXT NOT NULL,
+    "entity_type" "FileEntityType" NOT NULL,
+    "entity_id" TEXT NOT NULL,
+    "storage_bucket" TEXT NOT NULL,
+    "storage_key" TEXT NOT NULL,
+    "original_name" TEXT NOT NULL,
+    "mime_type" TEXT NOT NULL,
+    "file_size" INTEGER NOT NULL,
+    "uploaded_by" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "files_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "documents" (
+    "id" TEXT NOT NULL,
+    "order_id" TEXT NOT NULL,
+    "document_type" "DocumentType" NOT NULL,
+    "storage_bucket" TEXT NOT NULL,
+    "storage_key" TEXT NOT NULL,
+    "generated_by" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "documents_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "audit_logs" (
+    "id" TEXT NOT NULL,
+    "user_id" TEXT NOT NULL,
+    "entity_type" TEXT NOT NULL,
+    "entity_id" TEXT NOT NULL,
+    "action_type" TEXT NOT NULL,
+    "old_value" JSONB,
+    "new_value" JSONB,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "order_number_sequences" (
+    "year" INTEGER NOT NULL,
+    "last_value" INTEGER NOT NULL DEFAULT 0,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "order_number_sequences_pkey" PRIMARY KEY ("year")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_login_key" ON "users"("login");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "roles_name_key" ON "roles"("name");
+
+-- CreateIndex
+CREATE INDEX "user_roles_user_id_idx" ON "user_roles"("user_id");
+
+-- CreateIndex
+CREATE INDEX "user_roles_role_id_idx" ON "user_roles"("role_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "user_roles_user_id_role_id_key" ON "user_roles"("user_id", "role_id");
+
+-- CreateIndex
+CREATE INDEX "clients_phone_idx" ON "clients"("phone");
+
+-- CreateIndex
+CREATE INDEX "clients_full_name_idx" ON "clients"("full_name");
+
+-- CreateIndex
+CREATE INDEX "clients_deleted_at_idx" ON "clients"("deleted_at");
+
+-- CreateIndex
+CREATE INDEX "devices_client_id_idx" ON "devices"("client_id");
+
+-- CreateIndex
+CREATE INDEX "devices_imei_idx" ON "devices"("imei");
+
+-- CreateIndex
+CREATE INDEX "devices_serial_number_idx" ON "devices"("serial_number");
+
+-- CreateIndex
+CREATE INDEX "devices_brand_model_idx" ON "devices"("brand", "model");
+
+-- CreateIndex
+CREATE INDEX "devices_deleted_at_idx" ON "devices"("deleted_at");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "repair_orders_order_number_key" ON "repair_orders"("order_number");
+
+-- CreateIndex
+CREATE INDEX "repair_orders_client_id_idx" ON "repair_orders"("client_id");
+
+-- CreateIndex
+CREATE INDEX "repair_orders_device_id_idx" ON "repair_orders"("device_id");
+
+-- CreateIndex
+CREATE INDEX "repair_orders_receiver_user_id_idx" ON "repair_orders"("receiver_user_id");
+
+-- CreateIndex
+CREATE INDEX "repair_orders_master_user_id_idx" ON "repair_orders"("master_user_id");
+
+-- CreateIndex
+CREATE INDEX "repair_orders_status_idx" ON "repair_orders"("status");
+
+-- CreateIndex
+CREATE INDEX "repair_orders_created_at_idx" ON "repair_orders"("created_at");
+
+-- CreateIndex
+CREATE INDEX "repair_orders_status_created_at_idx" ON "repair_orders"("status", "created_at");
+
+-- CreateIndex
+CREATE INDEX "repair_orders_deleted_at_idx" ON "repair_orders"("deleted_at");
+
+-- CreateIndex
+CREATE INDEX "repair_order_status_history_order_id_idx" ON "repair_order_status_history"("order_id");
+
+-- CreateIndex
+CREATE INDEX "repair_order_status_history_changed_by_idx" ON "repair_order_status_history"("changed_by");
+
+-- CreateIndex
+CREATE INDEX "repair_order_status_history_created_at_idx" ON "repair_order_status_history"("created_at");
+
+-- CreateIndex
+CREATE INDEX "order_comments_order_id_idx" ON "order_comments"("order_id");
+
+-- CreateIndex
+CREATE INDEX "order_comments_user_id_idx" ON "order_comments"("user_id");
+
+-- CreateIndex
+CREATE INDEX "order_comments_created_at_idx" ON "order_comments"("created_at");
+
+-- CreateIndex
+CREATE INDEX "files_entity_type_idx" ON "files"("entity_type");
+
+-- CreateIndex
+CREATE INDEX "files_entity_id_idx" ON "files"("entity_id");
+
+-- CreateIndex
+CREATE INDEX "files_entity_type_entity_id_idx" ON "files"("entity_type", "entity_id");
+
+-- CreateIndex
+CREATE INDEX "files_uploaded_by_idx" ON "files"("uploaded_by");
+
+-- CreateIndex
+CREATE INDEX "documents_order_id_idx" ON "documents"("order_id");
+
+-- CreateIndex
+CREATE INDEX "documents_document_type_idx" ON "documents"("document_type");
+
+-- CreateIndex
+CREATE INDEX "documents_created_at_idx" ON "documents"("created_at");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_user_id_idx" ON "audit_logs"("user_id");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_entity_type_idx" ON "audit_logs"("entity_type");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_entity_id_idx" ON "audit_logs"("entity_id");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_action_type_idx" ON "audit_logs"("action_type");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_created_at_idx" ON "audit_logs"("created_at");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_entity_type_entity_id_idx" ON "audit_logs"("entity_type", "entity_id");
+
+-- AddForeignKey
+ALTER TABLE "user_roles" ADD CONSTRAINT "user_roles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "user_roles" ADD CONSTRAINT "user_roles_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "clients" ADD CONSTRAINT "clients_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "clients" ADD CONSTRAINT "clients_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "devices" ADD CONSTRAINT "devices_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "devices" ADD CONSTRAINT "devices_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "devices" ADD CONSTRAINT "devices_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "repair_orders" ADD CONSTRAINT "repair_orders_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "repair_orders" ADD CONSTRAINT "repair_orders_device_id_fkey" FOREIGN KEY ("device_id") REFERENCES "devices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "repair_orders" ADD CONSTRAINT "repair_orders_receiver_user_id_fkey" FOREIGN KEY ("receiver_user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "repair_orders" ADD CONSTRAINT "repair_orders_master_user_id_fkey" FOREIGN KEY ("master_user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "repair_orders" ADD CONSTRAINT "repair_orders_issued_by_fkey" FOREIGN KEY ("issued_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "repair_order_status_history" ADD CONSTRAINT "repair_order_status_history_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "repair_orders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "repair_order_status_history" ADD CONSTRAINT "repair_order_status_history_changed_by_fkey" FOREIGN KEY ("changed_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "order_comments" ADD CONSTRAINT "order_comments_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "repair_orders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "order_comments" ADD CONSTRAINT "order_comments_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "files" ADD CONSTRAINT "files_uploaded_by_fkey" FOREIGN KEY ("uploaded_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "documents" ADD CONSTRAINT "documents_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "repair_orders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "documents" ADD CONSTRAINT "documents_generated_by_fkey" FOREIGN KEY ("generated_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -11,12 +11,26 @@ export class AuthService {
   ) {}
 
   async validateUser(login: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { login } });
+    const user = await this.prisma.user.findUnique({
+      where: { login },
+      include: {
+        roles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
 
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    const valid = await bcrypt.compare(password, user.passwordHash);
+
+    if (!valid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     return user;
   }
@@ -24,10 +38,19 @@ export class AuthService {
   async login(login: string, password: string) {
     const user = await this.validateUser(login, password);
 
-    const payload = { sub: user.id, login: user.login };
+    const payload = {
+      sub: user.id,
+      login: user.login,
+      roles: user.roles.map((item) => item.role.name),
+    };
 
     return {
       access_token: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        login: user.login,
+        roles: user.roles.map((item) => item.role.name),
+      },
     };
   }
 }

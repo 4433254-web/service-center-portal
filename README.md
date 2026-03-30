@@ -1,43 +1,30 @@
-# Service Center Portal
+# Service Center Backend — Final MVP Pack
 
-Репозиторий проекта веб-портала сервисного центра.
+Этот архив — финальная контрольная точка MVP backend/infra.
 
-## Структура
+## Что внутри
+- production-oriented `docker-compose.yml`
+- `backend/.env.example`
+- `infra/nginx/nginx.conf`
+- `infra/nginx/conf.d/service-center.conf`
+- `SMOKE_CHECKLIST.md`
+- `MVP_RELEASE_CHECKLIST.md`
+- `DEPLOY_STEPS.md`
+- `GOOGLE_DRIVE_NAMING.md`
 
-- `backend/` — NestJS API
-- `frontend/` — Next.js приложение
-- `infra/` — Docker, Nginx, deployment
-- `docs/` — проектная документация
-- `archives/` — контрольные архивы версий
+## Локальный запуск
+```bash
+docker compose up -d --build
+```
 
-## Стек
-
-- Frontend: Next.js
-- Backend: NestJS
-- DB: PostgreSQL
-- Storage: S3 / MinIO
-- Infra: Docker + Nginx
-
-## MVP
-
-В MVP входят:
-- auth
-- users / roles
-- clients
-- devices
-- orders
-- status history
-- comments
-- files
-- documents (receipt PDF)
+## Проверки после запуска
+- `GET /api/health`
+- `GET /api/health/db`
+- `GET /api/health/storage`
+- login
+- create client
+- create device
+- create order
+- generate receipt
 - dashboard
 - audit
-
-## Правила
-
-- стартовый статус заказа: `accepted`
-- soft delete
-- RBAC: `admin`, `receiver`, `master`, `manager`
-- глобальный поиск: вариант B (`orders` + `clients` + `devices`)
-- формат номера заказа: `SC-YYYY-NNNNNN`
-- документы хранятся в object storage, в БД только metadata

@@ -1,15 +1,17 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, RoleName } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const roles = ['admin', 'receiver', 'master', 'manager'];
+  const roles: RoleName[] = ['admin', 'receiver', 'master', 'manager'];
 
   for (const name of roles) {
     await prisma.role.upsert({
       where: { name },
       update: {},
-      create: { name },
+      create: {
+        name,
+      },
     });
   }
 

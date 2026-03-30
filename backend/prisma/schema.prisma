@@ -7,76 +7,299 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum RoleName {
+  admin
+  receiver
+  master
+  manager
+}
+
+enum ClientType {
+  individual
+  company
+}
+
+enum DeviceType {
+  phone
+  tablet
+  laptop
+  pc
+  other
+}
+
+enum OrderStatus {
+  new
+  accepted
+  in_diagnostics
+  waiting_approval
+  in_progress
+  ready
+  issued
+  cancelled
+}
+
+enum FileEntityType {
+  order
+  device
+}
+
+enum DocumentType {
+  receipt
+  act
+  warranty
+}
+
 model User {
-  id        String     @id @default(uuid())
-  login     String     @unique
-  password  String
-  roles     UserRole[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id           String               @id @default(uuid())
+  login        String               @unique
+  passwordHash String               @map("password_hash")
+  isActive     Boolean              @default(true) @map("is_active")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+
+  roles                UserRole[]
+  createdClients       Client[]                  @relation("ClientCreatedBy")
+  updatedClients       Client[]                  @relation("ClientUpdatedBy")
+  createdDevices       Device[]                  @relation("DeviceCreatedBy")
+  updatedDevices       Device[]                  @relation("DeviceUpdatedBy")
+  receiverOrders       RepairOrder[]             @relation("ReceiverOrders")
+  masterOrders         RepairOrder[]             @relation("MasterOrders")
+  issuedOrders         RepairOrder[]             @relation("IssuedOrders")
+  statusHistoryChanges RepairOrderStatusHistory[] @relation("StatusChangedBy")
+  orderComments        OrderComment[]
+  uploadedFiles        File[]
+  generatedDocuments   Document[]
+  auditLogs            AuditLog[]
+
+  @@map("users")
 }
 
 model Role {
-  id    String     @id @default(uuid())
-  name  String     @unique
-  users UserRole[]
+  id          String   @id @default(uuid())
+  name        RoleName @unique
+  description String?
+
+  userRoles UserRole[]
+
+  @@map("roles")
 }
 
 model UserRole {
   id     String @id @default(uuid())
-  userId String
-  roleId String
+  userId String @map("user_id")
+  roleId String @map("role_id")
 
-  user User @relation(fields: [userId], references: [id])
-  role Role @relation(fields: [roleId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
 
   @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
 }
 
 model Client {
-  id        String   @id @default(uuid())
-  fullName  String
-  phone     String
-  email     String?
-  deletedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String      @id @default(uuid())
+  clientType ClientType  @map("client_type")
+  fullName   String      @map("full_name")
+  phone      String
+  phoneExtra String?     @map("phone_extra")
+  email      String?
+  comment    String?
+  createdBy  String      @map("created_by")
+  updatedBy  String?     @map("updated_by")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+  deletedAt  DateTime?   @map("deleted_at")
+
+  createdByUser User  @relation("ClientCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  updatedByUser User? @relation("ClientUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
+
+  devices Device[]
+  orders  RepairOrder[]
+
+  @@index([phone])
+  @@index([fullName])
+  @@index([deletedAt])
+  @@map("clients")
 }
 
 model Device {
-  id           String   @id @default(uuid())
-  type         String
-  brand        String
-  model        String
-  serialNumber String?
-  clientId     String
-  client       Client   @relation(fields: [clientId], references: [id])
-  deletedAt    DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                   String      @id @default(uuid())
+  clientId             String      @map("client_id")
+  deviceType           DeviceType  @map("device_type")
+  brand                String
+  model                String
+  modification         String?
+  color                String?
+  imei                 String?
+  serialNumber         String?     @map("serial_number")
+  conditionDescription String?     @map("condition_description")
+  includedItems        String?     @map("included_items")
+  accessCode           String?     @map("access_code")
+  comment              String?
+  createdBy            String      @map("created_by")
+  updatedBy            String?     @map("updated_by")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+  deletedAt            DateTime?   @map("deleted_at")
+
+  client        Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdByUser User   @relation("DeviceCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  updatedByUser User?  @relation("DeviceUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
+
+  orders RepairOrder[]
+
+  @@index([clientId])
+  @@index([imei])
+  @@index([serialNumber])
+  @@index([brand, model])
+  @@index([deletedAt])
+  @@map("devices")
 }
 
-model Order {
+model RepairOrder {
+  id                    String      @id @default(uuid())
+  orderNumber           String      @unique @map("order_number")
+  clientId              String      @map("client_id")
+  deviceId              String      @map("device_id")
+  receiverUserId        String      @map("receiver_user_id")
+  masterUserId          String?     @map("master_user_id")
+  status                OrderStatus
+  issueDescription      String      @map("issue_description")
+  conditionAtAcceptance String      @map("condition_at_acceptance")
+  includedItems         String?     @map("included_items")
+  estimatedPrice        Decimal?    @db.Decimal(10, 2) @map("estimated_price")
+  estimatedReadyAt      DateTime?   @map("estimated_ready_at")
+  receiverComment       String?     @map("receiver_comment")
+  masterComment         String?     @map("master_comment")
+  issuedAt              DateTime?   @map("issued_at")
+  issuedBy              String?     @map("issued_by")
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+  deletedAt             DateTime?   @map("deleted_at")
+
+  client       Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  device       Device @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  receiverUser User   @relation("ReceiverOrders", fields: [receiverUserId], references: [id], onDelete: Restrict)
+  masterUser   User?  @relation("MasterOrders", fields: [masterUserId], references: [id], onDelete: Restrict)
+  issuedByUser User?  @relation("IssuedOrders", fields: [issuedBy], references: [id], onDelete: Restrict)
+
+  statusHistory RepairOrderStatusHistory[]
+  comments      OrderComment[]
+  documents     Document[]
+
+  @@index([clientId])
+  @@index([deviceId])
+  @@index([receiverUserId])
+  @@index([masterUserId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([deletedAt])
+  @@map("repair_orders")
+}
+
+model RepairOrderStatusHistory {
+  id         String       @id @default(uuid())
+  orderId    String       @map("order_id")
+  fromStatus OrderStatus? @map("from_status")
+  toStatus   OrderStatus  @map("to_status")
+  changedBy  String       @map("changed_by")
+  comment    String?
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  order RepairOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  user  User        @relation("StatusChangedBy", fields: [changedBy], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([changedBy])
+  @@index([createdAt])
+  @@map("repair_order_status_history")
+}
+
+model OrderComment {
   id          String   @id @default(uuid())
-  number      String   @unique
-  status      String
-  clientId    String
-  deviceId    String
-  masterId    String?
-  client      Client   @relation(fields: [clientId], references: [id])
-  device      Device   @relation(fields: [deviceId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
+  orderId     String   @map("order_id")
+  userId      String   @map("user_id")
+  commentText String   @map("comment_text")
+  isInternal  Boolean  @default(false) @map("is_internal")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  order RepairOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  user  User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("order_comments")
+}
+
+model File {
+  id            String         @id @default(uuid())
+  entityType    FileEntityType @map("entity_type")
+  entityId      String         @map("entity_id")
+  storageBucket String         @map("storage_bucket")
+  storageKey    String         @map("storage_key")
+  originalName  String         @map("original_name")
+  mimeType      String         @map("mime_type")
+  fileSize      Int            @map("file_size")
+  uploadedBy    String         @map("uploaded_by")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  user User @relation(fields: [uploadedBy], references: [id], onDelete: Restrict)
+
+  @@index([entityType])
+  @@index([entityId])
+  @@index([entityType, entityId])
+  @@index([uploadedBy])
+  @@map("files")
+}
+
+model Document {
+  id            String       @id @default(uuid())
+  orderId       String       @map("order_id")
+  documentType  DocumentType @map("document_type")
+  storageBucket String       @map("storage_bucket")
+  storageKey    String       @map("storage_key")
+  generatedBy   String       @map("generated_by")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  order RepairOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  user  User        @relation(fields: [generatedBy], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([documentType])
+  @@index([createdAt])
+  @@map("documents")
 }
 
 model AuditLog {
   id         String   @id @default(uuid())
-  userId     String
-  entityType String
-  entityId   String
-  actionType String
-  oldValue   Json?
-  newValue   Json?
-  createdAt  DateTime @default(now())
+  userId     String   @map("user_id")
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  actionType String   @map("action_type")
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([actionType])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model OrderNumberSequence {
+  year      Int      @id
+  lastValue Int      @default(0) @map("last_value")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("order_number_sequences")
 }

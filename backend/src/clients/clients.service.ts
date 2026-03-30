@@ -6,7 +6,15 @@ export class ClientsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: { fullName: string; phone: string; email?: string }) {
-    return this.prisma.client.create({ data });
+    return this.prisma.client.create({
+      data: {
+        clientType: 'individual',
+        fullName: data.fullName,
+        phone: data.phone,
+        email: data.email ?? null,
+        createdBy: '986c2998-21d2-40ef-a270-a590264b3e71',
+      },
+    });
   }
 
   async findAll(search?: string) {
@@ -28,7 +36,10 @@ export class ClientsService {
   }
 
   async update(id: string, data: any) {
-    return this.prisma.client.update({ where: { id }, data });
+    return this.prisma.client.update({
+      where: { id },
+      data,
+    });
   }
 
   async remove(id: string) {
