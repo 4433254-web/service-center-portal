@@ -1,32 +1,36 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { OrdersService } from './orders.service';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  create(@Body() body: any) {
-    return this.ordersService.create(body);
+  @Roles('admin','receiver')
+  create(@Body() body: any, @CurrentUser() user: any) {
+    return this.ordersService.create(body, user);
   }
 
   @Get()
-  findAll() {
-    return this.ordersService.findAll();
+  @Roles('admin','receiver','manager','master')
+  findAll(@CurrentUser() user: any) {
+    return this.ordersService.findAll(user);
   }
 
   @Post(':id/status')
+  @Roles('admin','receiver','master')
   changeStatus(
     @Param('id') id: string,
     @Body() body: { toStatus: string; comment?: string },
+    @CurrentUser() user: any,
   ) {
-    return this.ordersService.changeStatus(id, body, {
-      userId: '986c2998-21d2-40ef-a270-a590264b3e71',
-      roles: ['admin'],
-    });
+    return this.ordersService.changeStatus(id, body, user);
   }
 
   @Get(':id/status-history')
+  @Roles('admin','receiver','manager','master')
   getStatusHistory(@Param('id') id: string) {
     return this.ordersService.getStatusHistory(id);
   }

@@ -1,44 +1,52 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
 export class ClientsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: { fullName: string; phone: string; email?: string }) {
+  async create(data: any, user: any) {
     return this.prisma.client.create({
       data: {
         clientType: 'individual',
         fullName: data.fullName,
         phone: data.phone,
         email: data.email ?? null,
-        createdBy: '986c2998-21d2-40ef-a270-a590264b3e71',
+        createdBy: user.id,
       },
     });
   }
 
-  async findAll(search?: string) {
+  async findAll(search: string, user: any) {
+    const where: any = { deletedAt: null };
+
+    if (search) {
+      where.OR = [
+        { fullName: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search } },
+        { email: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (user.roles.includes('master')) {
+      where.repairOrders = {
+        some: {
+          masterUserId: user.id,
+          deletedAt: null,
+        },
+      };
+    }
+
     return this.prisma.client.findMany({
-      where: {
-        deletedAt: null,
-        ...(search
-          ? {
-              OR: [
-                { fullName: { contains: search, mode: 'insensitive' } },
-                { phone: { contains: search } },
-                { email: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
+      where,
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async update(id: string, data: any) {
+  async update(id: string, data: any, user: any) {
     return this.prisma.client.update({
       where: { id },
-      data,
+      data: { ...data, updatedBy: user.id },
     });
   }
 
