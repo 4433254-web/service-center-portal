@@ -1,4 +1,4 @@
 export class ChangeOrderStatusDto {
-  status!: string;
+  toStatus!: string;
   comment?: string;
 }

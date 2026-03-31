@@ -6,7 +6,23 @@ export class DevicesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: any) {
-    return this.prisma.device.create({ data });
+    return this.prisma.device.create({
+      data: {
+        clientId: data.clientId,
+        deviceType: data.deviceType,
+        brand: data.brand,
+        model: data.model,
+        modification: data.modification ?? null,
+        color: data.color ?? null,
+        imei: data.imei ?? null,
+        serialNumber: data.serialNumber ?? null,
+        conditionDescription: data.conditionDescription ?? null,
+        includedItems: data.includedItems ?? null,
+        accessCode: data.accessCode ?? null,
+        comment: data.comment ?? null,
+        createdBy: '986c2998-21d2-40ef-a270-a590264b3e71',
+      },
+    });
   }
 
   async findAll(search?: string) {
@@ -29,7 +45,10 @@ export class DevicesService {
   }
 
   async update(id: string, data: any) {
-    return this.prisma.device.update({ where: { id }, data });
+    return this.prisma.device.update({
+      where: { id },
+      data,
+    });
   }
 
   async remove(id: string) {
