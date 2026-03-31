@@ -68,7 +68,13 @@ export class OrdersService {
       where.masterUserId = user.id;
     }
 
-    return this.prisma.repairOrder.findMany({ where });
+    return this.prisma.repairOrder.findMany({
+      where,
+      include: {
+        masterUser: { select: { id: true, login: true } },
+        receiverUser: { select: { id: true, login: true } },
+      },
+    });
   }
 
   async changeStatus(orderId: string, dto: any, user: any) {
@@ -163,5 +169,44 @@ export class OrdersService {
       generatedBy: document.generatedBy,
       createdAt: document.createdAt,
     }));
+  }
+
+  /**
+   * Assign a master to an order.
+   * Validates that the master exists and has the 'master' role.
+   * Only users with admin or manager roles should call this.
+   */
+  async assignMaster(orderId: string, masterUserId: string, user: any) {
+    const order = await this.prisma.repairOrder.findUnique({
+      where: { id: orderId },
+    });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+    // Load the user to be assigned as master along with their roles
+    const master = await this.prisma.user.findUnique({
+      where: { id: masterUserId },
+      include: {
+        roles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
+    if (!master) {
+      throw new NotFoundException('Master not found');
+    }
+    const hasMasterRole = master.roles.some((ur) => ur.role.name === 'master');
+    if (!hasMasterRole) {
+      throw new BadRequestException('User is not a master');
+    }
+    // Update the order with the new master
+    return this.prisma.repairOrder.update({
+      where: { id: orderId },
+      data: {
+        masterUserId,
+      },
+    });
   }
 }

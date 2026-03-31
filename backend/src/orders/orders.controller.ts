@@ -46,4 +46,19 @@ export class OrdersController {
   getDocuments(@Param('id') id: string, @CurrentUser() user: any) {
     return this.ordersService.getDocuments(id, user);
   }
+
+  /**
+   * Assign a master to an order.
+   * Only users with admin or manager roles can perform this action.
+   * Expects `masterUserId` in the request body.
+   */
+  @Post(':id/assign-master')
+  @Roles('admin', 'manager')
+  assignMaster(
+    @Param('id') id: string,
+    @Body() body: { masterUserId: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.assignMaster(id, body.masterUserId, user);
+  }
 }
