@@ -1,0 +1,25 @@
+# Node
+node_modules/
+dist/
+
+# Env
+.env
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads (runtime files)
+uploads/
+backend/uploads/
+
+# Generated documents
+*.pdf
+*.txt
+
+# Test artifacts
+test-receipt*.pdf
