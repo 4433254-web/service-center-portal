@@ -8,6 +8,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import PDFDocument = require('pdfkit');
 
+/**
+ * DocumentsService is responsible for generating and retrieving
+ * PDF documents (receipts, acceptance acts, warranty certificates)
+ * for repair orders. It encapsulates all logic related to data
+ * preparation, PDF layout and file storage. Masters are limited to
+ * viewing only their own orders.
+ */
 @Injectable()
 export class DocumentsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -172,6 +179,9 @@ export class DocumentsService {
       }));
   }
 
+  /**
+   * Return metadata for a single document. Masters cannot access other masters' documents.
+   */
   async getOne(id: string, user: any) {
     const document = await this.getDocumentEntity(id, user);
 
@@ -186,6 +196,9 @@ export class DocumentsService {
     };
   }
 
+  /**
+   * Return the storage key and filename for downloading a document. Masters cannot access other masters' documents.
+   */
   async getDownloadFile(id: string, user: any) {
     const document = await this.getDocumentEntity(id, user);
 
@@ -195,6 +208,9 @@ export class DocumentsService {
     };
   }
 
+  /**
+   * Find a document entity by ID, performing RBAC checks.
+   */
   private async getDocumentEntity(id: string, user: any) {
     const document = await this.prisma.document.findUnique({
       where: { id },
@@ -217,6 +233,9 @@ export class DocumentsService {
     return document;
   }
 
+  /**
+   * Build the data structure for a receipt.
+   */
   private buildReceiptData(order: any) {
     return {
       serviceCenter: {
@@ -262,45 +281,40 @@ export class DocumentsService {
   }
 
   /**
-   * Build the data structure for an acceptance act.
-   * Currently mirrors the receipt data, but separated for future customization.
+   * Build the data structure for an acceptance act. Currently mirrors receipt data for future customization.
    */
   private buildActData(order: any) {
     return this.buildReceiptData(order);
   }
 
   /**
-   * Build the data structure for a warranty certificate.
-   * Currently mirrors the receipt data, but separated for future customization.
+   * Build the data structure for a warranty certificate. Currently mirrors receipt data for future customization.
    */
   private buildWarrantyData(order: any) {
     return this.buildReceiptData(order);
   }
 
+  /**
+   * Write a receipt PDF to disk.
+   */
   private saveReceiptPdfToDisk(orderId: string, receiptData: any) {
     const documentsDir = path.join(process.cwd(), 'uploads', 'documents');
-
     if (!fs.existsSync(documentsDir)) {
       fs.mkdirSync(documentsDir, { recursive: true });
     }
-
     const fileName = `receipt-${orderId}-${Date.now()}.pdf`;
     const absolutePath = path.join(documentsDir, fileName);
-
     const doc = new PDFDocument({
       size: 'A4',
       margin: 50,
     });
-
     const stream = fs.createWriteStream(absolutePath);
     doc.pipe(stream);
 
     const lineGap = 6;
 
-    doc.fontSize(18).text(receiptData.serviceCenter.name, { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(16).text('Receipt', { align: 'center' });
-    doc.moveDown(1);
+    // Unified header: service center details and document title
+    this.writeHeader(doc, 'Receipt', receiptData.serviceCenter);
 
     this.writeSectionTitle(doc, 'Order');
     this.writeField(doc, 'Order number', receiptData.order.number, lineGap);
@@ -381,7 +395,6 @@ export class DocumentsService {
     doc.fontSize(12).text('Employee signature: ________________');
 
     doc.end();
-
     return {
       fileName,
       storageKey: absolutePath,
@@ -393,28 +406,22 @@ export class DocumentsService {
    */
   private saveActPdfToDisk(orderId: string, actData: any) {
     const documentsDir = path.join(process.cwd(), 'uploads', 'documents');
-
     if (!fs.existsSync(documentsDir)) {
       fs.mkdirSync(documentsDir, { recursive: true });
     }
-
     const fileName = `act-${orderId}-${Date.now()}.pdf`;
     const absolutePath = path.join(documentsDir, fileName);
-
     const doc = new PDFDocument({
       size: 'A4',
       margin: 50,
     });
-
     const stream = fs.createWriteStream(absolutePath);
     doc.pipe(stream);
 
     const lineGap = 6;
 
-    doc.fontSize(18).text(actData.serviceCenter.name, { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(16).text('Acceptance Act', { align: 'center' });
-    doc.moveDown(1);
+    // Unified header: service center details and document title
+    this.writeHeader(doc, 'Acceptance Act', actData.serviceCenter);
 
     this.writeSectionTitle(doc, 'Order');
     this.writeField(doc, 'Order number', actData.order.number, lineGap);
@@ -495,7 +502,6 @@ export class DocumentsService {
     doc.fontSize(12).text('Employee signature: ________________');
 
     doc.end();
-
     return {
       fileName,
       storageKey: absolutePath,
@@ -507,28 +513,22 @@ export class DocumentsService {
    */
   private saveWarrantyPdfToDisk(orderId: string, warrantyData: any) {
     const documentsDir = path.join(process.cwd(), 'uploads', 'documents');
-
     if (!fs.existsSync(documentsDir)) {
       fs.mkdirSync(documentsDir, { recursive: true });
     }
-
     const fileName = `warranty-${orderId}-${Date.now()}.pdf`;
     const absolutePath = path.join(documentsDir, fileName);
-
     const doc = new PDFDocument({
       size: 'A4',
       margin: 50,
     });
-
     const stream = fs.createWriteStream(absolutePath);
     doc.pipe(stream);
 
     const lineGap = 6;
 
-    doc.fontSize(18).text(warrantyData.serviceCenter.name, { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(16).text('Warranty Certificate', { align: 'center' });
-    doc.moveDown(1);
+    // Unified header: service center details and document title
+    this.writeHeader(doc, 'Warranty Certificate', warrantyData.serviceCenter);
 
     this.writeSectionTitle(doc, 'Order');
     this.writeField(
@@ -624,18 +624,51 @@ export class DocumentsService {
     doc.fontSize(12).text('Employee signature: ________________');
 
     doc.end();
-
     return {
       fileName,
       storageKey: absolutePath,
     };
   }
 
+  /**
+   * Write the common header for all document types. The header includes
+   * the service center name and optional contact details, followed by
+   * the document title. Contact details are aligned to the left.
+   */
+  private writeHeader(
+    doc: PDFKit.PDFDocument,
+    docTitle: string,
+    serviceCenter: { name: string; phone?: string; address?: string; email?: string },
+  ) {
+    // Service center name
+    doc.fontSize(18).text(serviceCenter.name, { align: 'left' });
+    // Optional contact details below the name
+    if (serviceCenter.address) {
+      doc.fontSize(10).text(`Address: ${serviceCenter.address}`, { align: 'left' });
+    }
+    if (serviceCenter.phone) {
+      doc.fontSize(10).text(`Phone: ${serviceCenter.phone}`, { align: 'left' });
+    }
+    if (serviceCenter.email) {
+      doc.fontSize(10).text(`Email: ${serviceCenter.email}`, { align: 'left' });
+    }
+    doc.moveDown(0.5);
+    // Document title centered
+    doc.fontSize(16).text(docTitle, { align: 'center' });
+    doc.moveDown(1);
+  }
+
+  /**
+   * Write a section title to the PDF document.
+   */
   private writeSectionTitle(doc: PDFKit.PDFDocument, title: string) {
     doc.fontSize(14).text(title);
     doc.moveDown(0.3);
   }
 
+  /**
+   * Write a field with a label and value to the PDF document.
+   */
   private writeField(
     doc: PDFKit.PDFDocument,
     label: string,
@@ -647,15 +680,16 @@ export class DocumentsService {
     });
   }
 
+  /**
+   * Format values for display in PDF fields.
+   */
   private formatValue(value: unknown) {
     if (value === null || value === undefined || value === '') {
       return '';
     }
-
     if (value instanceof Date) {
       return value.toISOString();
     }
-
     return String(value);
   }
 }
