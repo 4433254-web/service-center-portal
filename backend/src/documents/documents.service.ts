@@ -1,695 +1,195 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import * as fs from 'fs';
 import * as path from 'path';
-import PDFDocument = require('pdfkit');
 
-/**
- * DocumentsService is responsible for generating and retrieving
- * PDF documents (receipts, acceptance acts, warranty certificates)
- * for repair orders. It encapsulates all logic related to data
- * preparation, PDF layout and file storage. Masters are limited to
- * viewing only their own orders.
- */
 @Injectable()
 export class DocumentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Generate a receipt document for the given order.
-   */
   async generateReceipt(orderId: string, user: any) {
-    const order = await this.prisma.repairOrder.findUnique({
-      where: { id: orderId },
+    const order = await this.prisma.repairOrder.findFirst({
+      where: { id: orderId, deletedAt: null },
       include: {
         client: true,
         device: true,
+        receiverUser: { select: { id: true, login: true } },
+        masterUser: { select: { id: true, login: true } },
       },
     });
 
-    if (!order) {
-      throw new NotFoundException('Order not found');
+    if (!order) throw new NotFoundException('Order not found');
+
+    // Generate HTML receipt
+    const html = this.buildReceiptHtml(order);
+
+    // Store as HTML file (in production, use S3; in dev, use local storage)
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'documents');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    const receiptData = this.buildReceiptData(order);
-    const savedFile = this.saveReceiptPdfToDisk(order.id, receiptData);
+    const filename = `receipt_${order.orderNumber}_${Date.now()}.html`;
+    const filePath = path.join(uploadsDir, filename);
+    fs.writeFileSync(filePath, html, 'utf-8');
+
+    const storageKey = path.join('uploads', 'documents', filename);
 
     const document = await this.prisma.document.create({
       data: {
-        orderId: order.id,
+        orderId,
         documentType: 'receipt',
         storageBucket: 'local',
-        storageKey: savedFile.storageKey,
+        storageKey,
         generatedBy: user.id,
       },
     });
 
     return {
-      success: true,
-      data: {
-        documentId: document.id,
-        documentType: document.documentType,
-        orderId: document.orderId,
-        storageBucket: document.storageBucket,
-        fileName: path.basename(document.storageKey),
-        createdAt: document.createdAt,
-      },
+      ...document,
+      url: `/api/documents/${document.id}/view`,
     };
   }
 
-  /**
-   * Generate an acceptance act for the given order.
-   */
-  async generateAct(orderId: string, user: any) {
-    const order = await this.prisma.repairOrder.findUnique({
-      where: { id: orderId },
+  async getDocument(id: string) {
+    const doc = await this.prisma.document.findUnique({ where: { id } });
+    if (!doc) throw new NotFoundException('Document not found');
+    return doc;
+  }
+
+  async viewDocument(id: string): Promise<{ html: string }> {
+    const doc = await this.getDocument(id);
+
+    const order = await this.prisma.repairOrder.findFirst({
+      where: { id: doc.orderId },
       include: {
         client: true,
         device: true,
+        receiverUser: { select: { id: true, login: true } },
+        masterUser: { select: { id: true, login: true } },
       },
     });
 
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
+    if (!order) throw new NotFoundException('Order not found');
 
-    const actData = this.buildActData(order);
-    const savedFile = this.saveActPdfToDisk(order.id, actData);
+    return { html: this.buildReceiptHtml(order) };
+  }
 
-    const document = await this.prisma.document.create({
-      data: {
-        orderId: order.id,
-        documentType: 'act',
-        storageBucket: 'local',
-        storageKey: savedFile.storageKey,
-        generatedBy: user.id,
-      },
-    });
-
-    return {
-      success: true,
-      data: {
-        documentId: document.id,
-        documentType: document.documentType,
-        orderId: document.orderId,
-        storageBucket: document.storageBucket,
-        fileName: path.basename(document.storageKey),
-        createdAt: document.createdAt,
-      },
+  private buildReceiptHtml(order: any): string {
+    const formatDate = (d: Date | string | null) => {
+      if (!d) return '—';
+      return new Date(d).toLocaleString('ru-RU');
     };
-  }
 
-  /**
-   * Generate a warranty certificate for the given order.
-   */
-  async generateWarranty(orderId: string, user: any) {
-    const order = await this.prisma.repairOrder.findUnique({
-      where: { id: orderId },
-      include: {
-        client: true,
-        device: true,
-      },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    const warrantyData = this.buildWarrantyData(order);
-    const savedFile = this.saveWarrantyPdfToDisk(order.id, warrantyData);
-
-    const document = await this.prisma.document.create({
-      data: {
-        orderId: order.id,
-        documentType: 'warranty',
-        storageBucket: 'local',
-        storageKey: savedFile.storageKey,
-        generatedBy: user.id,
-      },
-    });
-
-    return {
-      success: true,
-      data: {
-        documentId: document.id,
-        documentType: document.documentType,
-        orderId: document.orderId,
-        storageBucket: document.storageBucket,
-        fileName: path.basename(document.storageKey),
-        createdAt: document.createdAt,
-      },
+    const formatPrice = (p: any) => {
+      if (!p) return '—';
+      return `${Number(p).toFixed(2)} руб.`;
     };
-  }
 
-  /**
-   * Return a list of all documents belonging to an order.
-   * Masters can see only their own orders.
-   */
-  async getDocumentsByOrder(orderId: string, user: any) {
-    const documents = await this.prisma.document.findMany({
-      where: { orderId },
-      include: {
-        order: true,
-      },
-    });
-
-    return documents
-      .filter((document) => {
-        // Masters can only view documents for orders assigned to them
-        if (
-          user.roles.includes('master') &&
-          document.order?.masterUserId !== user.id
-        ) {
-          return false;
-        }
-        return true;
-      })
-      .map((document) => ({
-        id: document.id,
-        orderId: document.orderId,
-        documentType: document.documentType,
-        storageBucket: document.storageBucket,
-        fileName: path.basename(document.storageKey),
-        generatedBy: document.generatedBy,
-        createdAt: document.createdAt,
-      }));
-  }
-
-  /**
-   * Return metadata for a single document. Masters cannot access other masters' documents.
-   */
-  async getOne(id: string, user: any) {
-    const document = await this.getDocumentEntity(id, user);
-
-    return {
-      id: document.id,
-      orderId: document.orderId,
-      documentType: document.documentType,
-      storageBucket: document.storageBucket,
-      fileName: path.basename(document.storageKey),
-      generatedBy: document.generatedBy,
-      createdAt: document.createdAt,
+    const statusMap: Record<string, string> = {
+      accepted: 'Принят',
+      in_diagnostics: 'На диагностике',
+      waiting_approval: 'Ожидание согласования',
+      in_progress: 'В работе',
+      ready: 'Готов',
+      issued: 'Выдан',
+      cancelled: 'Отменён',
+      new: 'Новый',
     };
-  }
 
-  /**
-   * Return the storage key and filename for downloading a document. Masters cannot access other masters' documents.
-   */
-  async getDownloadFile(id: string, user: any) {
-    const document = await this.getDocumentEntity(id, user);
+    return `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Квитанция ${order.orderNumber}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 12pt; color: #000; background: #fff; padding: 20px; }
+    .page { max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #ccc; }
+    h1 { font-size: 18pt; text-align: center; margin-bottom: 4px; }
+    .subtitle { text-align: center; font-size: 10pt; color: #666; margin-bottom: 16px; }
+    .doc-title { font-size: 14pt; font-weight: bold; text-align: center; margin: 16px 0; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 8px; }
+    .section { margin: 12px 0; }
+    .section-title { font-weight: bold; font-size: 11pt; border-bottom: 1px solid #999; padding-bottom: 4px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 4px 8px; vertical-align: top; }
+    td:first-child { font-weight: bold; width: 40%; color: #333; }
+    .signatures { margin-top: 32px; display: flex; justify-content: space-between; }
+    .sig-block { width: 45%; }
+    .sig-line { border-top: 1px solid #000; margin-top: 40px; text-align: center; font-size: 9pt; color: #666; padding-top: 4px; }
+    .footer { margin-top: 24px; font-size: 9pt; color: #666; text-align: center; border-top: 1px solid #ccc; padding-top: 8px; }
+    @media print { body { padding: 0; } .page { border: none; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>Сервисный центр</h1>
+    <div class="subtitle">Ремонт телефонов, планшетов, компьютеров</div>
 
-    return {
-      storageKey: document.storageKey,
-      fileName: path.basename(document.storageKey),
-    };
-  }
+    <div class="doc-title">КВИТАНЦИЯ О ПРИЁМЕ УСТРОЙСТВА В РЕМОНТ</div>
 
-  /**
-   * Find a document entity by ID, performing RBAC checks.
-   */
-  private async getDocumentEntity(id: string, user: any) {
-    const document = await this.prisma.document.findUnique({
-      where: { id },
-      include: {
-        order: true,
-      },
-    });
+    <div class="section">
+      <div class="section-title">Заказ</div>
+      <table>
+        <tr><td>Номер заказа:</td><td><strong>${order.orderNumber}</strong></td></tr>
+        <tr><td>Дата и время приёма:</td><td>${formatDate(order.createdAt)}</td></tr>
+        <tr><td>Статус:</td><td>${statusMap[order.status] ?? order.status}</td></tr>
+      </table>
+    </div>
 
-    if (!document) {
-      throw new NotFoundException('Document not found');
-    }
+    <div class="section">
+      <div class="section-title">Клиент</div>
+      <table>
+        <tr><td>ФИО / Организация:</td><td>${order.client?.fullName ?? '—'}</td></tr>
+        <tr><td>Телефон:</td><td>${order.client?.phone ?? '—'}</td></tr>
+        ${order.client?.phoneExtra ? `<tr><td>Доп. телефон:</td><td>${order.client.phoneExtra}</td></tr>` : ''}
+      </table>
+    </div>
 
-    if (
-      user.roles.includes('master') &&
-      document.order?.masterUserId !== user.id
-    ) {
-      throw new ForbiddenException('Access denied');
-    }
+    <div class="section">
+      <div class="section-title">Устройство</div>
+      <table>
+        <tr><td>Тип:</td><td>${order.device?.deviceType ?? '—'}</td></tr>
+        <tr><td>Бренд:</td><td>${order.device?.brand ?? '—'}</td></tr>
+        <tr><td>Модель:</td><td>${order.device?.model ?? '—'}</td></tr>
+        ${order.device?.modification ? `<tr><td>Модификация:</td><td>${order.device.modification}</td></tr>` : ''}
+        ${order.device?.color ? `<tr><td>Цвет:</td><td>${order.device.color}</td></tr>` : ''}
+        ${order.device?.imei ? `<tr><td>IMEI:</td><td>${order.device.imei}</td></tr>` : ''}
+        ${order.device?.serialNumber ? `<tr><td>Серийный номер:</td><td>${order.device.serialNumber}</td></tr>` : ''}
+      </table>
+    </div>
 
-    return document;
-  }
+    <div class="section">
+      <div class="section-title">Неисправность и состояние</div>
+      <table>
+        <tr><td>Заявленная неисправность:</td><td>${order.issueDescription ?? '—'}</td></tr>
+        <tr><td>Состояние при приёме:</td><td>${order.conditionAtAcceptance ?? '—'}</td></tr>
+        <tr><td>Комплектация:</td><td>${order.includedItems ?? '—'}</td></tr>
+      </table>
+    </div>
 
-  /**
-   * Build the data structure for a receipt.
-   */
-  private buildReceiptData(order: any) {
-    return {
-      serviceCenter: {
-        name: 'Service Center',
-        phone: '',
-        address: '',
-        email: '',
-      },
-      order: {
-        id: order.id,
-        number: order.orderNumber,
-        status: order.status,
-        createdAt: order.createdAt,
-      },
-      client: {
-        fullName: order.client.fullName,
-        phone: order.client.phone,
-        phoneExtra: order.client.phoneExtra,
-      },
-      device: {
-        type: order.device.deviceType,
-        brand: order.device.brand,
-        model: order.device.model,
-        modification: order.device.modification,
-        color: order.device.color,
-        imei: order.device.imei,
-        serialNumber: order.device.serialNumber,
-      },
-      acceptance: {
-        issueDescription: order.issueDescription,
-        conditionAtAcceptance: order.conditionAtAcceptance,
-        includedItems: order.includedItems,
-      },
-      estimate: {
-        estimatedPrice: order.estimatedPrice,
-        estimatedReadyAt: order.estimatedReadyAt,
-      },
-      signatures: {
-        clientSignature: null,
-        employeeSignature: null,
-      },
-    };
-  }
+    <div class="section">
+      <div class="section-title">Предварительные условия</div>
+      <table>
+        <tr><td>Предварительная стоимость:</td><td>${formatPrice(order.estimatedPrice)}</td></tr>
+        <tr><td>Предв. срок готовности:</td><td>${formatDate(order.estimatedReadyAt)}</td></tr>
+      </table>
+    </div>
 
-  /**
-   * Build the data structure for an acceptance act. Currently mirrors receipt data for future customization.
-   */
-  private buildActData(order: any) {
-    return this.buildReceiptData(order);
-  }
+    <div class="signatures">
+      <div class="sig-block">
+        <div class="sig-line">Подпись клиента</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-line">Подпись сотрудника (${order.receiverUser?.login ?? '—'})</div>
+      </div>
+    </div>
 
-  /**
-   * Build the data structure for a warranty certificate. Currently mirrors receipt data for future customization.
-   */
-  private buildWarrantyData(order: any) {
-    return this.buildReceiptData(order);
-  }
-
-  /**
-   * Write a receipt PDF to disk.
-   */
-  private saveReceiptPdfToDisk(orderId: string, receiptData: any) {
-    const documentsDir = path.join(process.cwd(), 'uploads', 'documents');
-    if (!fs.existsSync(documentsDir)) {
-      fs.mkdirSync(documentsDir, { recursive: true });
-    }
-    const fileName = `receipt-${orderId}-${Date.now()}.pdf`;
-    const absolutePath = path.join(documentsDir, fileName);
-    const doc = new PDFDocument({
-      size: 'A4',
-      margin: 50,
-    });
-    const stream = fs.createWriteStream(absolutePath);
-    doc.pipe(stream);
-
-    const lineGap = 6;
-
-    // Unified header: service center details and document title
-    this.writeHeader(doc, 'Receipt', receiptData.serviceCenter);
-
-    this.writeSectionTitle(doc, 'Order');
-    this.writeField(doc, 'Order number', receiptData.order.number, lineGap);
-    this.writeField(doc, 'Status', receiptData.order.status, lineGap);
-    this.writeField(
-      doc,
-      'Created at',
-      this.formatValue(receiptData.order.createdAt),
-      lineGap,
-    );
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Client');
-    this.writeField(doc, 'Full name', receiptData.client.fullName, lineGap);
-    this.writeField(doc, 'Phone', receiptData.client.phone, lineGap);
-    this.writeField(doc, 'Extra phone', receiptData.client.phoneExtra, lineGap);
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Device');
-    this.writeField(doc, 'Type', receiptData.device.type, lineGap);
-    this.writeField(doc, 'Brand', receiptData.device.brand, lineGap);
-    this.writeField(doc, 'Model', receiptData.device.model, lineGap);
-    this.writeField(
-      doc,
-      'Modification',
-      receiptData.device.modification,
-      lineGap,
-    );
-    this.writeField(doc, 'Color', receiptData.device.color, lineGap);
-    this.writeField(doc, 'IMEI', receiptData.device.imei, lineGap);
-    this.writeField(
-      doc,
-      'Serial number',
-      receiptData.device.serialNumber,
-      lineGap,
-    );
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Acceptance');
-    this.writeField(
-      doc,
-      'Issue description',
-      receiptData.acceptance.issueDescription,
-      lineGap,
-    );
-    this.writeField(
-      doc,
-      'Condition at acceptance',
-      receiptData.acceptance.conditionAtAcceptance,
-      lineGap,
-    );
-    this.writeField(
-      doc,
-      'Included items',
-      receiptData.acceptance.includedItems,
-      lineGap,
-    );
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Estimate');
-    this.writeField(
-      doc,
-      'Estimated price',
-      receiptData.estimate.estimatedPrice,
-      lineGap,
-    );
-    this.writeField(
-      doc,
-      'Estimated ready at',
-      receiptData.estimate.estimatedReadyAt,
-      lineGap,
-    );
-    doc.moveDown(1.5);
-
-    this.writeSectionTitle(doc, 'Signatures');
-    doc.fontSize(12).text('Client signature: __________________');
-    doc.moveDown(1);
-    doc.fontSize(12).text('Employee signature: ________________');
-
-    doc.end();
-    return {
-      fileName,
-      storageKey: absolutePath,
-    };
-  }
-
-  /**
-   * Write an acceptance act PDF to disk.
-   */
-  private saveActPdfToDisk(orderId: string, actData: any) {
-    const documentsDir = path.join(process.cwd(), 'uploads', 'documents');
-    if (!fs.existsSync(documentsDir)) {
-      fs.mkdirSync(documentsDir, { recursive: true });
-    }
-    const fileName = `act-${orderId}-${Date.now()}.pdf`;
-    const absolutePath = path.join(documentsDir, fileName);
-    const doc = new PDFDocument({
-      size: 'A4',
-      margin: 50,
-    });
-    const stream = fs.createWriteStream(absolutePath);
-    doc.pipe(stream);
-
-    const lineGap = 6;
-
-    // Unified header: service center details and document title
-    this.writeHeader(doc, 'Acceptance Act', actData.serviceCenter);
-
-    this.writeSectionTitle(doc, 'Order');
-    this.writeField(doc, 'Order number', actData.order.number, lineGap);
-    this.writeField(doc, 'Status', actData.order.status, lineGap);
-    this.writeField(
-      doc,
-      'Created at',
-      this.formatValue(actData.order.createdAt),
-      lineGap,
-    );
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Client');
-    this.writeField(doc, 'Full name', actData.client.fullName, lineGap);
-    this.writeField(doc, 'Phone', actData.client.phone, lineGap);
-    this.writeField(doc, 'Extra phone', actData.client.phoneExtra, lineGap);
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Device');
-    this.writeField(doc, 'Type', actData.device.type, lineGap);
-    this.writeField(doc, 'Brand', actData.device.brand, lineGap);
-    this.writeField(doc, 'Model', actData.device.model, lineGap);
-    this.writeField(
-      doc,
-      'Modification',
-      actData.device.modification,
-      lineGap,
-    );
-    this.writeField(doc, 'Color', actData.device.color, lineGap);
-    this.writeField(doc, 'IMEI', actData.device.imei, lineGap);
-    this.writeField(
-      doc,
-      'Serial number',
-      actData.device.serialNumber,
-      lineGap,
-    );
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Acceptance');
-    this.writeField(
-      doc,
-      'Issue description',
-      actData.acceptance.issueDescription,
-      lineGap,
-    );
-    this.writeField(
-      doc,
-      'Condition at acceptance',
-      actData.acceptance.conditionAtAcceptance,
-      lineGap,
-    );
-    this.writeField(
-      doc,
-      'Included items',
-      actData.acceptance.includedItems,
-      lineGap,
-    );
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Estimate');
-    this.writeField(
-      doc,
-      'Estimated price',
-      actData.estimate.estimatedPrice,
-      lineGap,
-    );
-    this.writeField(
-      doc,
-      'Estimated ready at',
-      actData.estimate.estimatedReadyAt,
-      lineGap,
-    );
-    doc.moveDown(1.5);
-
-    this.writeSectionTitle(doc, 'Signatures');
-    doc.fontSize(12).text('Client signature: __________________');
-    doc.moveDown(1);
-    doc.fontSize(12).text('Employee signature: ________________');
-
-    doc.end();
-    return {
-      fileName,
-      storageKey: absolutePath,
-    };
-  }
-
-  /**
-   * Write a warranty certificate PDF to disk.
-   */
-  private saveWarrantyPdfToDisk(orderId: string, warrantyData: any) {
-    const documentsDir = path.join(process.cwd(), 'uploads', 'documents');
-    if (!fs.existsSync(documentsDir)) {
-      fs.mkdirSync(documentsDir, { recursive: true });
-    }
-    const fileName = `warranty-${orderId}-${Date.now()}.pdf`;
-    const absolutePath = path.join(documentsDir, fileName);
-    const doc = new PDFDocument({
-      size: 'A4',
-      margin: 50,
-    });
-    const stream = fs.createWriteStream(absolutePath);
-    doc.pipe(stream);
-
-    const lineGap = 6;
-
-    // Unified header: service center details and document title
-    this.writeHeader(doc, 'Warranty Certificate', warrantyData.serviceCenter);
-
-    this.writeSectionTitle(doc, 'Order');
-    this.writeField(
-      doc,
-      'Order number',
-      warrantyData.order.number,
-      lineGap,
-    );
-    this.writeField(doc, 'Status', warrantyData.order.status, lineGap);
-    this.writeField(
-      doc,
-      'Created at',
-      this.formatValue(warrantyData.order.createdAt),
-      lineGap,
-    );
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Client');
-    this.writeField(
-      doc,
-      'Full name',
-      warrantyData.client.fullName,
-      lineGap,
-    );
-    this.writeField(doc, 'Phone', warrantyData.client.phone, lineGap);
-    this.writeField(
-      doc,
-      'Extra phone',
-      warrantyData.client.phoneExtra,
-      lineGap,
-    );
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Device');
-    this.writeField(doc, 'Type', warrantyData.device.type, lineGap);
-    this.writeField(doc, 'Brand', warrantyData.device.brand, lineGap);
-    this.writeField(doc, 'Model', warrantyData.device.model, lineGap);
-    this.writeField(
-      doc,
-      'Modification',
-      warrantyData.device.modification,
-      lineGap,
-    );
-    this.writeField(doc, 'Color', warrantyData.device.color, lineGap);
-    this.writeField(doc, 'IMEI', warrantyData.device.imei, lineGap);
-    this.writeField(
-      doc,
-      'Serial number',
-      warrantyData.device.serialNumber,
-      lineGap,
-    );
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Acceptance');
-    this.writeField(
-      doc,
-      'Issue description',
-      warrantyData.acceptance.issueDescription,
-      lineGap,
-    );
-    this.writeField(
-      doc,
-      'Condition at acceptance',
-      warrantyData.acceptance.conditionAtAcceptance,
-      lineGap,
-    );
-    this.writeField(
-      doc,
-      'Included items',
-      warrantyData.acceptance.includedItems,
-      lineGap,
-    );
-    doc.moveDown(0.7);
-
-    this.writeSectionTitle(doc, 'Estimate');
-    this.writeField(
-      doc,
-      'Estimated price',
-      warrantyData.estimate.estimatedPrice,
-      lineGap,
-    );
-    this.writeField(
-      doc,
-      'Estimated ready at',
-      warrantyData.estimate.estimatedReadyAt,
-      lineGap,
-    );
-    doc.moveDown(1.5);
-
-    this.writeSectionTitle(doc, 'Signatures');
-    doc.fontSize(12).text('Client signature: __________________');
-    doc.moveDown(1);
-    doc.fontSize(12).text('Employee signature: ________________');
-
-    doc.end();
-    return {
-      fileName,
-      storageKey: absolutePath,
-    };
-  }
-
-  /**
-   * Write the common header for all document types. The header includes
-   * the service center name and optional contact details, followed by
-   * the document title. Contact details are aligned to the left.
-   */
-  private writeHeader(
-    doc: PDFKit.PDFDocument,
-    docTitle: string,
-    serviceCenter: { name: string; phone?: string; address?: string; email?: string },
-  ) {
-    // Service center name
-    doc.fontSize(18).text(serviceCenter.name, { align: 'left' });
-    // Optional contact details below the name
-    if (serviceCenter.address) {
-      doc.fontSize(10).text(`Address: ${serviceCenter.address}`, { align: 'left' });
-    }
-    if (serviceCenter.phone) {
-      doc.fontSize(10).text(`Phone: ${serviceCenter.phone}`, { align: 'left' });
-    }
-    if (serviceCenter.email) {
-      doc.fontSize(10).text(`Email: ${serviceCenter.email}`, { align: 'left' });
-    }
-    doc.moveDown(0.5);
-    // Document title centered
-    doc.fontSize(16).text(docTitle, { align: 'center' });
-    doc.moveDown(1);
-  }
-
-  /**
-   * Write a section title to the PDF document.
-   */
-  private writeSectionTitle(doc: PDFKit.PDFDocument, title: string) {
-    doc.fontSize(14).text(title);
-    doc.moveDown(0.3);
-  }
-
-  /**
-   * Write a field with a label and value to the PDF document.
-   */
-  private writeField(
-    doc: PDFKit.PDFDocument,
-    label: string,
-    value: unknown,
-    lineGap = 4,
-  ) {
-    doc.fontSize(12).text(`${label}: ${this.formatValue(value)}`, {
-      lineGap,
-    });
-  }
-
-  /**
-   * Format values for display in PDF fields.
-   */
-  private formatValue(value: unknown) {
-    if (value === null || value === undefined || value === '') {
-      return '';
-    }
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-    return String(value);
+    <div class="footer">
+      Документ сформирован: ${formatDate(new Date())}
+    </div>
+  </div>
+</body>
+</html>`;
   }
 }

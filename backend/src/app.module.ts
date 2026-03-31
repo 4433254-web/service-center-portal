@@ -14,10 +14,11 @@ import { OrdersModule } from './orders/orders.module';
 import { AuditModule } from './audit/audit.module';
 import { HealthModule } from './health/health.module';
 import { FilesModule } from './files/files.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { DocumentsModule } from './documents/documents.module';
 
 import { JwtGuard } from './common/guards/jwt.guard';
 import { RolesGuard } from './common/guards/roles.guard';
-import { DocumentsModule } from './documents/documents.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { DocumentsModule } from './documents/documents.module';
     AuditModule,
     HealthModule,
     FilesModule,
+    DashboardModule,
     DocumentsModule,
   ],
   providers: [

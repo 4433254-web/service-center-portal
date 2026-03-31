@@ -8,25 +8,43 @@ export class ClientsController {
   constructor(private readonly clientsService: ClientsService) {}
 
   @Post()
-  @Roles('admin','receiver')
+  @Roles('admin', 'receiver')
   create(@Body() body: any, @CurrentUser() user: any) {
     return this.clientsService.create(body, user);
   }
 
   @Get()
-  @Roles('admin','receiver','manager','master')
+  @Roles('admin', 'receiver', 'manager', 'master')
   findAll(@Query('search') search: string, @CurrentUser() user: any) {
     return this.clientsService.findAll(search, user);
   }
 
+  @Get(':id')
+  @Roles('admin', 'receiver', 'manager', 'master')
+  findOne(@Param('id') id: string) {
+    return this.clientsService.findOne(id);
+  }
+
+  @Get(':id/orders')
+  @Roles('admin', 'receiver', 'manager', 'master')
+  findOrders(@Param('id') id: string) {
+    return this.clientsService.findOrders(id);
+  }
+
+  @Get(':id/devices')
+  @Roles('admin', 'receiver', 'manager', 'master')
+  findDevices(@Param('id') id: string) {
+    return this.clientsService.findDevices(id);
+  }
+
   @Patch(':id')
-  @Roles('admin','receiver')
+  @Roles('admin', 'receiver')
   update(@Param('id') id: string, @Body() body: any, @CurrentUser() user: any) {
     return this.clientsService.update(id, body, user);
   }
 
   @Delete(':id')
-  @Roles('admin','receiver')
+  @Roles('admin', 'receiver')
   remove(@Param('id') id: string) {
     return this.clientsService.remove(id);
   }
