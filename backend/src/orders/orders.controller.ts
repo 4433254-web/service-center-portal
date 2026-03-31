@@ -34,4 +34,11 @@ export class OrdersController {
   getStatusHistory(@Param('id') id: string) {
     return this.ordersService.getStatusHistory(id);
   }
+
+  // 🔽 НОВЫЙ endpoint
+  @Get(':id/files')
+  @Roles('admin','receiver','manager','master')
+  getFiles(@Param('id') id: string) {
+    return this.ordersService.getFiles(id);
+  }
 }

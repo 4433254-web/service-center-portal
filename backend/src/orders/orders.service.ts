@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { ORDER_STATUS_TRANSITIONS } from './order-status-transitions';
 import { OrderStatus } from '../common/enums/order-status.enum';
@@ -35,7 +40,9 @@ export class OrdersService {
           conditionAtAcceptance: data.conditionAtAcceptance,
           includedItems: data.includedItems ?? null,
           estimatedPrice: data.estimatedPrice ?? null,
-          estimatedReadyAt: data.estimatedReadyAt ? new Date(data.estimatedReadyAt) : null,
+          estimatedReadyAt: data.estimatedReadyAt
+            ? new Date(data.estimatedReadyAt)
+            : null,
           receiverComment: data.receiverComment ?? null,
         },
       });
@@ -64,9 +71,13 @@ export class OrdersService {
   }
 
   async changeStatus(orderId: string, dto: any, user: any) {
-    const order = await this.prisma.repairOrder.findUnique({ where: { id: orderId } });
+    const order = await this.prisma.repairOrder.findUnique({
+      where: { id: orderId },
+    });
 
-    if (!order) throw new NotFoundException('Order not found');
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
 
     if (user.roles.includes('master') && order.masterUserId !== user.id) {
       throw new ForbiddenException('Access denied');
@@ -108,6 +119,19 @@ export class OrdersService {
   }
 
   async getStatusHistory(orderId: string) {
-    return this.prisma.repairOrderStatusHistory.findMany({ where: { orderId } });
+    return this.prisma.repairOrderStatusHistory.findMany({
+      where: { orderId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async getFiles(orderId: string) {
+    return this.prisma.file.findMany({
+      where: {
+        entityType: 'order',
+        entityId: orderId,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

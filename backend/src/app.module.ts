@@ -13,6 +13,8 @@ import { DevicesModule } from './devices/devices.module';
 import { OrdersModule } from './orders/orders.module';
 import { AuditModule } from './audit/audit.module';
 import { HealthModule } from './health/health.module';
+import { FilesModule } from './files/files.module';
+
 import { JwtGuard } from './common/guards/jwt.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -31,6 +33,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     OrdersModule,
     AuditModule,
     HealthModule,
+    FilesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtGuard },

@@ -5,7 +5,7 @@ import { PrismaService } from '../database/prisma.service';
 export class DevicesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: any) {
+  async create(data: any, user: any) {
     return this.prisma.device.create({
       data: {
         clientId: data.clientId,
@@ -25,7 +25,7 @@ export class DevicesService {
     });
   }
 
-  async findAll(search?: string) {
+  async findAll(search?: string, user?: any) {
     return this.prisma.device.findMany({
       where: {
         deletedAt: null,
@@ -44,7 +44,7 @@ export class DevicesService {
     });
   }
 
-  async update(id: string, data: any) {
+  async update(id: string, data: any, user: any) {
     return this.prisma.device.update({
       where: { id },
       data,
