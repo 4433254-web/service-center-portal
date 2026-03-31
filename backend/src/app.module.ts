@@ -17,6 +17,7 @@ import { FilesModule } from './files/files.module';
 
 import { JwtGuard } from './common/guards/jwt.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { DocumentsModule } from './documents/documents.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     AuditModule,
     HealthModule,
     FilesModule,
+    DocumentsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtGuard },

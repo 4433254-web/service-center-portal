@@ -8,19 +8,19 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  @Roles('admin','receiver')
+  @Roles('admin', 'receiver')
   create(@Body() body: any, @CurrentUser() user: any) {
     return this.ordersService.create(body, user);
   }
 
   @Get()
-  @Roles('admin','receiver','manager','master')
+  @Roles('admin', 'receiver', 'manager', 'master')
   findAll(@CurrentUser() user: any) {
     return this.ordersService.findAll(user);
   }
 
   @Post(':id/status')
-  @Roles('admin','receiver','master')
+  @Roles('admin', 'receiver', 'master')
   changeStatus(
     @Param('id') id: string,
     @Body() body: { toStatus: string; comment?: string },
@@ -30,15 +30,20 @@ export class OrdersController {
   }
 
   @Get(':id/status-history')
-  @Roles('admin','receiver','manager','master')
+  @Roles('admin', 'receiver', 'manager', 'master')
   getStatusHistory(@Param('id') id: string) {
     return this.ordersService.getStatusHistory(id);
   }
 
-  // 🔽 НОВЫЙ endpoint
   @Get(':id/files')
-  @Roles('admin','receiver','manager','master')
+  @Roles('admin', 'receiver', 'manager', 'master')
   getFiles(@Param('id') id: string) {
     return this.ordersService.getFiles(id);
+  }
+
+  @Get(':id/documents')
+  @Roles('admin', 'receiver', 'manager', 'master')
+  getDocuments(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.ordersService.getDocuments(id, user);
   }
 }

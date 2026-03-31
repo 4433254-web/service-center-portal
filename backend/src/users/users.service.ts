@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import * as bcrypt from 'bcrypt';
 
@@ -9,16 +9,18 @@ export class UsersService {
   async create(data: {
     login: string;
     password: string;
-    roles?: string[];
+    roles?: string[] | string;
     isActive?: boolean;
   }) {
     const hash = await bcrypt.hash(data.password, 10);
 
-    const roleRecords = data.roles?.length
+    const normalizedRoles = this.normalizeRoles(data.roles);
+
+    const roleRecords = normalizedRoles.length
       ? await this.prisma.role.findMany({
           where: {
             name: {
-              in: data.roles as any[],
+              in: normalizedRoles as any[],
             },
           },
         })
@@ -57,5 +59,27 @@ export class UsersService {
         },
       },
     });
+  }
+
+  private normalizeRoles(input?: string[] | string): string[] {
+    if (!input) {
+      return [];
+    }
+
+    if (Array.isArray(input)) {
+      return input.filter(Boolean);
+    }
+
+    if (typeof input === 'string') {
+      if (input === 'System.Object[]') {
+        throw new BadRequestException(
+          'roles must be sent as JSON array, for example ["master"]',
+        );
+      }
+
+      return [input];
+    }
+
+    return [];
   }
 }

@@ -8,6 +8,7 @@ import { PrismaService } from '../database/prisma.service';
 import { ORDER_STATUS_TRANSITIONS } from './order-status-transitions';
 import { OrderStatus } from '../common/enums/order-status.enum';
 import { OrderStatusPolicyService } from './order-status-policy.service';
+import * as path from 'path';
 
 @Injectable()
 export class OrdersService {
@@ -133,5 +134,34 @@ export class OrdersService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getDocuments(orderId: string, user: any) {
+    const order = await this.prisma.repairOrder.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (user.roles.includes('master') && order.masterUserId !== user.id) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const documents = await this.prisma.document.findMany({
+      where: { orderId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return documents.map((document) => ({
+      id: document.id,
+      orderId: document.orderId,
+      documentType: document.documentType,
+      storageBucket: document.storageBucket,
+      fileName: path.basename(document.storageKey),
+      generatedBy: document.generatedBy,
+      createdAt: document.createdAt,
+    }));
   }
 }
