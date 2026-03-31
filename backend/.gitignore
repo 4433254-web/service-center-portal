@@ -16,10 +16,13 @@ Thumbs.db
 # Uploads (runtime files)
 uploads/
 backend/uploads/
+uploads/documents/
+backend/uploads/documents/
 
 # Generated documents
 *.pdf
 *.txt
 
 # Test artifacts
-test-receipt*.pdf
+test-receipt*.pdfuploads/documents/
+backend/uploads/documents/
