@@ -1,13 +1,27 @@
+# Dependencies
 node_modules/
-dist/
 .next/
-coverage/
+dist/
+
+# Env files
 .env
-.env.*
-!.env.example
-*.log
+.env.local
+.env.production
+
+# Uploads
+backend/uploads/
+backend/receipt-*.pdf
+backend/test-*.pdf
+
+# Temp
+_unzip_*/
+*.zip
+*.rar
+patch_ihattab.py
+
+# OS
 .DS_Store
-.idea/
-.vscode/
-postgres_data/
-minio_data/
+Thumbs.db
+
+# Prisma
+backend/prisma/fix-passwords.ts

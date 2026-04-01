@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as QRCode from 'qrcode';
 
 @Injectable()
 export class DocumentsService {
@@ -20,8 +21,11 @@ export class DocumentsService {
 
     if (!order) throw new NotFoundException('Order not found');
 
-    // Generate HTML receipt
-    const html = this.buildReceiptHtml(order);
+    // Generate QR code as SVG string
+    const orderUrl = `${process.env.APP_URL ?? 'http://localhost:3002'}/orders/${orderId}`;
+    const qrSvg = await QRCode.toString(orderUrl, { type: 'svg', width: 120, margin: 1 });
+
+    const html = this.buildReceiptHtml(order, qrSvg, orderUrl);
 
     // Store as HTML file (in production, use S3; in dev, use local storage)
     const uploadsDir = path.join(process.cwd(), 'uploads', 'documents');
@@ -72,10 +76,13 @@ export class DocumentsService {
 
     if (!order) throw new NotFoundException('Order not found');
 
-    return { html: this.buildReceiptHtml(order) };
+    const orderUrl = `${process.env.APP_URL ?? 'http://localhost:3002'}/orders/${doc.orderId}`;
+    const qrSvg = await QRCode.toString(orderUrl, { type: 'svg', width: 120, margin: 1 });
+
+    return { html: this.buildReceiptHtml(order, qrSvg, orderUrl) };
   }
 
-  private buildReceiptHtml(order: any): string {
+  private buildReceiptHtml(order: any, qrSvg: string, orderUrl: string): string {
     const formatDate = (d: Date | string | null) => {
       if (!d) return '—';
       return new Date(d).toLocaleString('ru-RU');
@@ -118,6 +125,9 @@ export class DocumentsService {
     .sig-block { width: 45%; }
     .sig-line { border-top: 1px solid #000; margin-top: 40px; text-align: center; font-size: 9pt; color: #666; padding-top: 4px; }
     .footer { margin-top: 24px; font-size: 9pt; color: #666; text-align: center; border-top: 1px solid #ccc; padding-top: 8px; }
+    .qr-block { float: right; margin: 0 0 8px 16px; text-align: center; }
+    .qr-block svg { display: block; }
+    .qr-label { font-size: 8pt; color: #666; margin-top: 4px; }
     @media print { body { padding: 0; } .page { border: none; } }
   </style>
 </head>
@@ -129,6 +139,10 @@ export class DocumentsService {
     <div class="doc-title">КВИТАНЦИЯ О ПРИЁМЕ УСТРОЙСТВА В РЕМОНТ</div>
 
     <div class="section">
+      <div class="qr-block">
+        ${qrSvg}
+        <div class="qr-label">Сканируйте для открытия заказа</div>
+      </div>
       <div class="section-title">Заказ</div>
       <table>
         <tr><td>Номер заказа:</td><td><strong>${order.orderNumber}</strong></td></tr>
@@ -186,10 +200,12 @@ export class DocumentsService {
     </div>
 
     <div class="footer">
-      Документ сформирован: ${formatDate(new Date())}
+      Документ сформирован: ${formatDate(new Date())}<br/>
+      <span style="font-size:8pt;color:#999">${orderUrl}</span>
     </div>
   </div>
 </body>
 </html>`;
   }
 }
+

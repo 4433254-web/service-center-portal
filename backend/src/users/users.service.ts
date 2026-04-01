@@ -2,6 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import * as bcrypt from 'bcrypt';
 
+function normalizeUser(user: any) {
+  return {
+    ...user,
+    roles: (user.roles ?? []).map((r: any) =>
+      typeof r === 'string' ? r : r.role?.name ?? r.name,
+    ),
+  };
+}
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -36,10 +45,11 @@ export class UsersService {
   }
 
   async findAll() {
-    return this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       include: { roles: { include: { role: true } } },
       orderBy: { createdAt: 'asc' },
     });
+    return users.map(normalizeUser);
   }
 
   async findOne(id: string) {
@@ -47,10 +57,8 @@ export class UsersService {
       where: { id },
       include: { roles: { include: { role: true } } },
     });
-
     if (!user) throw new NotFoundException('User not found');
-
-    return user;
+    return normalizeUser(user);
   }
 
   async update(id: string, data: {
@@ -83,7 +91,7 @@ export class UsersService {
       include: { roles: { include: { role: true } } },
     });
 
-    return updated;
+    return normalizeUser(updated);
   }
 
   async resetPassword(id: string, newPassword: string) {

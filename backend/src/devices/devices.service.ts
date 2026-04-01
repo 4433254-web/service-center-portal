@@ -25,36 +25,44 @@ export class DevicesService {
     });
   }
 
-  async findAll(search?: string, user?: any) {
+  async findAll(query: any, user?: any) {
     const where: any = { deletedAt: null };
 
-    if (search) {
+    if (query?.search) {
       where.OR = [
-        { brand: { contains: search, mode: 'insensitive' } },
-        { model: { contains: search, mode: 'insensitive' } },
-        { serialNumber: { contains: search } },
-        { imei: { contains: search } },
+        { brand: { contains: query.search, mode: 'insensitive' } },
+        { model: { contains: query.search, mode: 'insensitive' } },
+        { serialNumber: { contains: query.search } },
+        { imei: { contains: query.search } },
       ];
+    }
+
+    if (query?.clientId) {
+      where.clientId = query.clientId;
     }
 
     if (user?.roles?.includes('master')) {
       where.orders = {
-        some: {
-          masterUserId: user.id,
-          deletedAt: null,
-        },
+        some: { masterUserId: user.id, deletedAt: null },
       };
     }
 
-    return this.prisma.device.findMany({
-      where,
-      include: {
-        client: {
-          select: { id: true, fullName: true, phone: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const page = Number(query?.page ?? 1);
+    const limit = Number(query?.limit ?? 20);
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.device.findMany({
+        where,
+        include: { client: { select: { id: true, fullName: true, phone: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.device.count({ where }),
+    ]);
+
+    return { items, total, page, limit };
   }
 
   async findOne(id: string, user: any) {

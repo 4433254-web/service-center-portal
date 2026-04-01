@@ -15,8 +15,8 @@ export class ClientsController {
 
   @Get()
   @Roles('admin', 'receiver', 'manager', 'master')
-  findAll(@Query('search') search: string, @CurrentUser() user: any) {
-    return this.clientsService.findAll(search, user);
+  findAll(@Query() query: any, @CurrentUser() user: any) {
+    return this.clientsService.findAll(query, user);
   }
 
   @Get(':id')

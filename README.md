@@ -1,30 +1,63 @@
-# Service Center Backend — Final MVP Pack
+# Сервисный Центр — Веб-портал управления ремонтами
 
-Этот архив — финальная контрольная точка MVP backend/infra.
+## Быстрый запуск
 
-## Что внутри
-- production-oriented `docker-compose.yml`
-- `backend/.env.example`
-- `infra/nginx/nginx.conf`
-- `infra/nginx/conf.d/service-center.conf`
-- `SMOKE_CHECKLIST.md`
-- `MVP_RELEASE_CHECKLIST.md`
-- `DEPLOY_STEPS.md`
-- `GOOGLE_DRIVE_NAMING.md`
-
-## Локальный запуск
 ```bash
-docker compose up -d --build
+# Двойной клик или через CMD:
+start.bat
+
+# Или через PowerShell:
+powershell -ExecutionPolicy Bypass -File start.ps1
 ```
 
-## Проверки после запуска
-- `GET /api/health`
-- `GET /api/health/db`
-- `GET /api/health/storage`
-- login
-- create client
-- create device
-- create order
-- generate receipt
-- dashboard
-- audit
+Или запустить раздельно:
+
+```powershell
+# Терминал 1 — бэкенд
+$env:NODE_ENV = "development"
+cd backend
+npm run start:dev
+
+# Терминал 2 — фронтенд
+cd frontend
+npm run dev
+```
+
+## Адреса
+
+| Сервис | URL |
+|--------|-----|
+| Фронтенд | http://localhost:3000 |
+| Бэкенд API | http://localhost:3001/api |
+| Health | http://localhost:3001/api/health |
+
+## Тестовые учётные записи
+
+| Логин | Пароль | Роль |
+|-------|--------|------|
+| admin | admin123 | Администратор |
+| receiver1 | receiver123 | Приёмщик |
+| master1 | master123 | Мастер |
+| manager1 | manager123 | Руководитель |
+
+## QR-коды заказов
+
+- В карточке заказа — блок «📱 QR-код заказа» в правой колонке
+- В списке заказов — иконка QR рядом с каждым заказом
+- В квитанции — QR-код в правом верхнем углу
+
+**Для production** укажите в `backend/.env`:
+```
+APP_URL=https://ваш-домен.ru
+```
+
+## Стек
+
+- **Frontend**: Next.js 14 + Tailwind CSS + react-qr-code
+- **Backend**: NestJS + Prisma + PostgreSQL
+- **Инфра**: Docker Compose + Nginx + MinIO
+
+## ⚠️ Важно
+
+Переменная `NODE_ENV=production` в системе блокирует установку devDependencies.
+Всегда запускайте бэкенд через `start.bat` или устанавливайте `$env:NODE_ENV = "development"` перед `npm run start:dev`.

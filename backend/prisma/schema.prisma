@@ -41,6 +41,7 @@ enum OrderStatus {
 enum FileEntityType {
   order
   device
+  order_photo
 }
 
 enum DocumentType {
@@ -58,6 +59,7 @@ model User {
   updatedAt    DateTime             @updatedAt @map("updated_at")
 
   roles                UserRole[]
+  locations            UserLocation[]
   createdClients       Client[]                  @relation("ClientCreatedBy")
   updatedClients       Client[]                  @relation("ClientUpdatedBy")
   createdDevices       Device[]                  @relation("DeviceCreatedBy")
@@ -70,6 +72,7 @@ model User {
   uploadedFiles        File[]
   generatedDocuments   Document[]
   auditLogs            AuditLog[]
+  createdLocations     ServiceLocation[]
 
   @@map("users")
 }
@@ -96,6 +99,40 @@ model UserRole {
   @@index([userId])
   @@index([roleId])
   @@map("user_roles")
+}
+
+model ServiceLocation {
+  id        String    @id @default(uuid())
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  isActive  Boolean   @default(true) @map("is_active")
+  createdBy String    @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  createdByUser User           @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  users         UserLocation[]
+  orders        RepairOrder[]  @relation("OrderLocation")
+  transferredOrders RepairOrder[] @relation("OrderTransferredFrom")
+
+  @@map("service_locations")
+}
+
+model UserLocation {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  locationId String   @map("location_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location ServiceLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, locationId])
+  @@index([userId])
+  @@index([locationId])
+  @@map("user_locations")
 }
 
 model Client {
@@ -163,6 +200,8 @@ model RepairOrder {
   orderNumber           String      @unique @map("order_number")
   clientId              String      @map("client_id")
   deviceId              String      @map("device_id")
+  locationId            String?     @map("location_id")
+  transferredFromLocationId String? @map("transferred_from_location_id")
   receiverUserId        String      @map("receiver_user_id")
   masterUserId          String?     @map("master_user_id")
   status                OrderStatus
@@ -181,6 +220,8 @@ model RepairOrder {
 
   client       Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
   device       Device @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  location     ServiceLocation? @relation("OrderLocation", fields: [locationId], references: [id], onDelete: Restrict)
+  transferredFromLocation ServiceLocation? @relation("OrderTransferredFrom", fields: [transferredFromLocationId], references: [id], onDelete: Restrict)
   receiverUser User   @relation("ReceiverOrders", fields: [receiverUserId], references: [id], onDelete: Restrict)
   masterUser   User?  @relation("MasterOrders", fields: [masterUserId], references: [id], onDelete: Restrict)
   issuedByUser User?  @relation("IssuedOrders", fields: [issuedBy], references: [id], onDelete: Restrict)

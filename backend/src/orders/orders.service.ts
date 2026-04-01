@@ -266,11 +266,69 @@ export class OrdersService {
 
   async getFiles(orderId: string) {
     return this.prisma.file.findMany({
-      where: {
-        entityType: 'order',
-        entityId: orderId,
-      },
+      where: { entityType: 'order', entityId: orderId },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getPhotos(orderId: string) {
+    return this.prisma.file.findMany({
+      where: { entityType: 'order_photo', entityId: orderId },
+      include: { user: { select: { id: true, login: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async addPhoto(orderId: string, file: any, comment: string, stage: string, user: any) {
+    const order = await this.prisma.repairOrder.findFirst({ where: { id: orderId, deletedAt: null } });
+    if (!order) throw new NotFoundException('Order not found');
+
+    return this.prisma.file.create({
+      data: {
+        entityType: 'order_photo' as any,
+        entityId: orderId,
+        storageBucket: 'local',
+        storageKey: file.path,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        uploadedBy: user.id,
+        comment: comment ?? null,
+        stage: stage ?? null,
+      } as any,
+    });
+  }
+
+  async deletePhoto(photoId: string, user: any) {
+    const photo = await this.prisma.file.findUnique({ where: { id: photoId } });
+    if (!photo) throw new NotFoundException('Photo not found');
+    return this.prisma.file.delete({ where: { id: photoId } });
+  }
+
+  async transferOrder(orderId: string, toLocationId: string, comment: string, user: any) {
+    const order = await this.prisma.repairOrder.findFirst({ where: { id: orderId, deletedAt: null } });
+    if (!order) throw new NotFoundException('Order not found');
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.repairOrder.update({
+        where: { id: orderId },
+        data: {
+          transferredFromLocationId: order.locationId,
+          locationId: toLocationId,
+        },
+      });
+
+      await tx.repairOrderStatusHistory.create({
+        data: {
+          orderId,
+          fromStatus: order.status as any,
+          toStatus: order.status as any,
+          changedBy: user.id,
+          comment: comment ? `Передан в другую точку. ${comment}` : 'Передан в другую точку',
+        },
+      });
+
+      return updated;
     });
   }
 

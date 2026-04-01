@@ -16,6 +16,7 @@ import { HealthModule } from './health/health.module';
 import { FilesModule } from './files/files.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DocumentsModule } from './documents/documents.module';
+import { LocationsModule } from './locations/locations.module';
 
 import { JwtGuard } from './common/guards/jwt.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -38,6 +39,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     FilesModule,
     DashboardModule,
     DocumentsModule,
+    LocationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtGuard },

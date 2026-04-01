@@ -1,4 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import * as path from 'path';
+import * as fs from 'fs';
 import { OrdersService } from './orders.service';
 import { DocumentsService } from '../documents/documents.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -85,5 +89,58 @@ export class OrdersController {
   @Roles('admin', 'receiver', 'manager', 'master')
   getFiles(@Param('id') id: string) {
     return this.ordersService.getFiles(id);
+  }
+
+  @Get(':id/photos')
+  @Roles('admin', 'receiver', 'manager', 'master')
+  getPhotos(@Param('id') id: string) {
+    return this.ordersService.getPhotos(id);
+  }
+
+  @Post(':id/photos')
+  @Roles('admin', 'receiver', 'master')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: (req, file, cb) => {
+        const dir = path.join(process.cwd(), 'uploads', 'order-photos');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+      },
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+      },
+    }),
+    limits: { fileSize: 20 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) cb(null, true);
+      else cb(new Error('Only images allowed'), false);
+    },
+  }))
+  uploadPhoto(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('comment') comment: string,
+    @Body('stage') stage: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.addPhoto(id, file, comment, stage, user);
+  }
+
+  @Delete(':id/photos/:photoId')
+  @Roles('admin', 'receiver', 'master')
+  deletePhoto(@Param('photoId') photoId: string, @CurrentUser() user: any) {
+    return this.ordersService.deletePhoto(photoId, user);
+  }
+
+  @Post(':id/transfer')
+  @Roles('admin', 'receiver', 'manager')
+  transferOrder(
+    @Param('id') id: string,
+    @Body('toLocationId') toLocationId: string,
+    @Body('comment') comment: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.transferOrder(id, toLocationId, comment, user);
   }
 }

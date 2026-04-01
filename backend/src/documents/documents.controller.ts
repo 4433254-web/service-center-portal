@@ -20,4 +20,12 @@ export class DocumentsController {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   }
+
+  @Get(':id/download')
+  @Roles('admin', 'receiver', 'manager', 'master')
+  async download(@Param('id') id: string, @Res() res: Response) {
+    const { html } = await this.documentsService.viewDocument(id);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  }
 }

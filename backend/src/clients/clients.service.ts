@@ -19,30 +19,38 @@ export class ClientsService {
     });
   }
 
-  async findAll(search: string, user: any) {
+  async findAll(query: any, user: any) {
     const where: any = { deletedAt: null };
 
-    if (search) {
+    if (query?.search) {
       where.OR = [
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search } },
-        { email: { contains: search, mode: 'insensitive' } },
+        { fullName: { contains: query.search, mode: 'insensitive' } },
+        { phone: { contains: query.search } },
+        { email: { contains: query.search, mode: 'insensitive' } },
       ];
     }
 
     if (user.roles.includes('master')) {
       where.orders = {
-        some: {
-          masterUserId: user.id,
-          deletedAt: null,
-        },
+        some: { masterUserId: user.id, deletedAt: null },
       };
     }
 
-    return this.prisma.client.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
+    const page = Number(query?.page ?? 1);
+    const limit = Number(query?.limit ?? 20);
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.client.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.client.count({ where }),
+    ]);
+
+    return { items, total, page, limit };
   }
 
   async findOne(id: string) {
