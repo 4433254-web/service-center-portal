@@ -16,7 +16,7 @@ export class OrdersController {
   ) {}
 
   @Post()
-  @Roles('admin', 'receiver')
+  @Roles('admin', 'receiver', 'master')
   create(@Body() body: any, @CurrentUser() user: any) {
     return this.ordersService.create(body, user);
   }

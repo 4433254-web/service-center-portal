@@ -16,6 +16,10 @@ export class OrdersService {
     private readonly statusPolicy: OrderStatusPolicyService,
   ) {}
 
+  /** Только чистая роль мастера — без admin/receiver */
+  private isMasterOnly(roles: string[]): boolean {
+    return roles.includes('master') && !roles.includes('admin') && !roles.includes('receiver');
+  }
   async create(data: any, user: any) {
     const year = new Date().getFullYear();
 
@@ -28,13 +32,18 @@ export class OrdersService {
 
       const orderNumber = `SC-${year}-${String(sequence.lastValue).padStart(6, '0')}`;
 
+      // Если мастер создаёт заказ сам — автоматически назначить себя мастером
+      const masterUserId = data.masterUserId ?? data.master_user_id ??
+        (this.isMasterOnly(user.roles) ? user.id : null);
+
       const order = await tx.repairOrder.create({
         data: {
           orderNumber,
           clientId: data.clientId,
           deviceId: data.deviceId,
           receiverUserId: user.id,
-          masterUserId: data.masterId ?? data.master_user_id ?? null,
+          masterUserId,
+          locationId: data.locationId ?? null,
           status: 'accepted',
           issueDescription: data.issueDescription ?? data.issue_description,
           conditionAtAcceptance: data.conditionAtAcceptance ?? data.condition_at_acceptance,
@@ -67,7 +76,8 @@ export class OrdersService {
   async findAll(user: any, query?: any) {
     const where: any = { deletedAt: null };
 
-    if (user.roles.includes('master')) {
+    // Только чистый мастер (без других ролей) видит только свои заказы
+    if (this.isMasterOnly(user.roles)) {
       where.masterUserId = user.id;
     }
 
@@ -127,7 +137,8 @@ export class OrdersService {
 
     if (!order) throw new NotFoundException('Order not found');
 
-    if (user.roles.includes('master') && order.masterUserId !== user.id) {
+    // Только чистый мастер ограничен своими заказами
+    if (this.isMasterOnly(user.roles) && order.masterUserId !== user.id) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -146,7 +157,7 @@ export class OrdersService {
 
     if (!order) throw new NotFoundException('Order not found');
 
-    if (user.roles.includes('master') && order.masterUserId !== user.id) {
+    if (this.isMasterOnly(user.roles) && order.masterUserId !== user.id) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -167,7 +178,7 @@ export class OrdersService {
 
     if (!order) throw new NotFoundException('Order not found');
 
-    if (user.roles.includes('master') && order.masterUserId !== user.id) {
+    if (this.isMasterOnly(user.roles) && order.masterUserId !== user.id) {
       throw new ForbiddenException('Access denied');
     }
 
