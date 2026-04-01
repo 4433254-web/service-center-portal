@@ -53,14 +53,12 @@ export default function OrderPhotos({ orderId, canUpload }: Props) {
     await load();
   }
 
-  const grouped = photos.reduce((acc: any, p: any) => {
+  const grouped = photos.reduce((acc: Record<string, any[]>, p: any) => {
     const s = p.stage || 'other';
     if (!acc[s]) acc[s] = [];
     acc[s].push(p);
     return acc;
   }, {} as Record<string, any[]>);
-
-  return (
     <div className="card p-5">
       <h2 className="text-base font-semibold text-gray-700 mb-3">🖼 Фотографии</h2>
 
@@ -85,7 +83,7 @@ export default function OrderPhotos({ orderId, canUpload }: Props) {
         <p className="text-gray-400 text-sm text-center py-4">Фотографий пока нет</p>
       )}
 
-      {Object.entries(grouped).map(([s, items]: [string, any[]]) => (
+      {Object.entries(grouped).map(([s, items]) => (
         <div key={s} className="mb-4">
           <div className="text-xs font-semibold text-gray-500 mb-2">{STAGE_LABELS[s] ?? s}</div>
           <div className="grid grid-cols-3 gap-2">
