@@ -20,6 +20,10 @@ _unzip_*/
 *.rar
 patch_ihattab.py
 
+# TypeScript build cache
+backend/tsconfig.build.tsbuildinfo
+*.tsbuildinfo
+
 # OS
 .DS_Store
 Thumbs.db
