@@ -14,8 +14,13 @@ backend/uploads/
 backend/receipt-*.pdf
 backend/test-*.pdf
 
-# Temp
-_unzip_*/
+# Test scripts
+test-*.sh
+patch-*.sh
+patch-*.py
+update-caddy.sh
+deploy.sh
+deploy_tar.py
 *.zip
 *.rar
 patch_ihattab.py
