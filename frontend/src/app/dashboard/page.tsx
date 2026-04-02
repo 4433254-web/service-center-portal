@@ -3,92 +3,157 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AppLayout from '@/components/Layout/AppLayout';
 import StatusBadge from '@/components/ui/StatusBadge';
+import Spinner from '@/components/ui/Spinner';
 import { dashboardApi } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { formatDate } from '@/lib/helpers';
 
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="card p-5">
-      <div className={`text-3xl font-bold ${color}`}>{value}</div>
-      <div className="text-sm text-gray-500 mt-1">{label}</div>
-    </div>
-  );
+interface Stats {
+  accepted: number;
+  in_diagnostics: number;
+  waiting_approval: number;
+  in_progress: number;
+  ready: number;
+  issued_today: number;
+  active: number;
 }
 
+const statCards = [
+  { key: 'accepted',       label: 'Принято',         icon: '📥', color: 'bg-blue-50 border-blue-200 text-blue-700' },
+  { key: 'in_diagnostics', label: 'На диагностике',  icon: '🔬', color: 'bg-yellow-50 border-yellow-200 text-yellow-700' },
+  { key: 'in_progress',    label: 'В работе',        icon: '🔧', color: 'bg-purple-50 border-purple-200 text-purple-700' },
+  { key: 'ready',          label: 'Готово к выдаче', icon: '✅', color: 'bg-green-50 border-green-200 text-green-700' },
+  { key: 'issued_today',   label: 'Выдано сегодня',  icon: '📤', color: 'bg-teal-50 border-teal-200 text-teal-700' },
+  { key: 'active',         label: 'Всего активных',  icon: '📊', color: 'bg-gray-50 border-gray-200 text-gray-700' },
+];
+
 export default function DashboardPage() {
-  const [data, setData] = useState<any>(null);
+  const { user } = useAuth();
+  const [data, setData] = useState<{ stats: Stats; recent_orders: any[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    dashboardApi.stats().then(setData).catch(console.error).finally(() => setLoading(false));
+    dashboardApi.stats()
+      .then(setData)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return (
-    <AppLayout>
-      <div className="flex items-center justify-center h-64 text-gray-400 animate-pulse">Загрузка дашборда…</div>
-    </AppLayout>
-  );
-
-  const s = data?.stats ?? {};
+  const greeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Доброе утро';
+    if (h < 18) return 'Добрый день';
+    return 'Добрый вечер';
+  };
 
   return (
     <AppLayout>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="page-title">Дашборд</h1>
-        <Link href="/orders/new" className="btn-primary">+ Новый заказ</Link>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">
+          {greeting()}, {user?.login}!
+        </h1>
+        <p className="text-gray-500 text-sm mt-1">
+          {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Активных заказов" value={s.activeOrders ?? 0} color="text-blue-600" />
-        <StatCard label="Принято" value={s.accepted ?? 0} color="text-blue-500" />
-        <StatCard label="В работе" value={s.inProgress ?? 0} color="text-purple-600" />
-        <StatCard label="Готово к выдаче" value={s.ready ?? 0} color="text-green-600" />
-        <StatCard label="На диагностике" value={s.inDiagnostics ?? 0} color="text-yellow-600" />
-        <StatCard label="Ожид. согласования" value={s.waitingApproval ?? 0} color="text-orange-600" />
-        <StatCard label="Выдано сегодня" value={s.issuedToday ?? 0} color="text-teal-600" />
-        <StatCard label="Всего заказов" value={s.total ?? 0} color="text-gray-600" />
-      </div>
+      {loading ? (
+        <div className="flex justify-center py-16"><Spinner size="lg" /></div>
+      ) : (
+        <>
+          {/* Карточки статистики */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+            {statCards.map(card => (
+              <Link
+                key={card.key}
+                href={card.key === 'issued_today' || card.key === 'active'
+                  ? '/orders'
+                  : `/orders?status=${card.key}`}
+                className={`card p-4 border flex items-center gap-3 hover:shadow-md transition-shadow ${card.color}`}
+              >
+                <span className="text-2xl">{card.icon}</span>
+                <div>
+                  <div className="text-2xl font-bold leading-none">
+                    {data?.stats[card.key as keyof Stats] ?? 0}
+                  </div>
+                  <div className="text-xs mt-0.5 opacity-80">{card.label}</div>
+                </div>
+              </Link>
+            ))}
+          </div>
 
-      <div className="card">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-800">Последние заказы</h2>
-          <Link href="/orders" className="text-sm text-blue-600 hover:underline">Все заказы →</Link>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Номер</th>
-                <th>Клиент</th>
-                <th>Устройство</th>
-                <th>Статус</th>
-                <th>Дата</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data?.recentOrders ?? []).map((o: any) => (
-                <tr key={o.id} className="cursor-pointer">
-                  <td>
-                    <Link href={`/orders/${o.id}`} className="font-mono text-blue-600 hover:underline text-sm">
-                      {o.orderNumber}
-                    </Link>
-                  </td>
-                  <td>
-                    <div className="text-sm font-medium text-gray-900">{o.client?.fullName}</div>
-                    <div className="text-xs text-gray-400">{o.client?.phone}</div>
-                  </td>
-                  <td className="text-sm text-gray-700">{o.device?.brand} {o.device?.model}</td>
-                  <td><StatusBadge status={o.status} /></td>
-                  <td className="text-xs text-gray-500">{formatDate(o.updatedAt)}</td>
-                </tr>
+          {/* Быстрые действия */}
+          <div className="flex flex-wrap gap-3 mb-8">
+            <Link href="/orders/new" className="btn-primary">
+              + Новый заказ
+            </Link>
+            <Link href="/orders?status=ready" className="btn-secondary">
+              📤 Готовые к выдаче ({data?.stats.ready ?? 0})
+            </Link>
+            <Link href="/clients" className="btn-secondary">
+              👤 Клиенты
+            </Link>
+          </div>
+
+          {/* Последние заказы */}
+          <div className="card p-0 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-700">Последние заказы</h2>
+              <Link href="/orders" className="text-sm text-blue-600 hover:underline">Все заказы →</Link>
+            </div>
+
+            {/* Десктоп-таблица */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="text-left px-5 py-2.5 text-xs text-gray-400 font-medium">Номер</th>
+                    <th className="text-left px-3 py-2.5 text-xs text-gray-400 font-medium">Клиент</th>
+                    <th className="text-left px-3 py-2.5 text-xs text-gray-400 font-medium">Устройство</th>
+                    <th className="text-left px-3 py-2.5 text-xs text-gray-400 font-medium">Статус</th>
+                    <th className="text-left px-3 py-2.5 text-xs text-gray-400 font-medium">Обновлён</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data?.recent_orders ?? []).map(o => (
+                    <tr key={o.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                      <td className="px-5 py-3">
+                        <Link href={`/orders/${o.id}`} className="font-mono text-blue-600 hover:underline font-medium">
+                          {o.orderNumber}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3 text-gray-700">{o.client?.fullName}</td>
+                      <td className="px-3 py-3 text-gray-500">{o.device?.brand} {o.device?.model}</td>
+                      <td className="px-3 py-3"><StatusBadge status={o.status} /></td>
+                      <td className="px-3 py-3 text-gray-400 text-xs">{formatDate(o.updatedAt)}</td>
+                    </tr>
+                  ))}
+                  {!(data?.recent_orders?.length) && (
+                    <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">Заказов пока нет</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Мобильные карточки */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {(data?.recent_orders ?? []).map(o => (
+                <Link key={o.id} href={`/orders/${o.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-sm font-medium text-blue-600">{o.orderNumber}</div>
+                    <div className="text-sm text-gray-700 truncate">{o.client?.fullName}</div>
+                    <div className="text-xs text-gray-400">{o.device?.brand} {o.device?.model}</div>
+                  </div>
+                  <div className="flex-shrink-0"><StatusBadge status={o.status} /></div>
+                </Link>
               ))}
-              {!(data?.recentOrders?.length) && (
-                <tr><td colSpan={5} className="text-center text-gray-400 py-8">Заказов пока нет</td></tr>
+              {!(data?.recent_orders?.length) && (
+                <div className="px-4 py-8 text-center text-gray-400 text-sm">Заказов пока нет</div>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </div>
+          </div>
+        </>
+      )}
     </AppLayout>
   );
 }

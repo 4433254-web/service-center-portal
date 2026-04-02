@@ -4,11 +4,12 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 
 const navItems = [
-  { href: '/dashboard', label: 'Дашборд', icon: '📊', roles: [] },
-  { href: '/orders', label: 'Заказы', icon: '🔧', roles: [] },
-  { href: '/clients', label: 'Клиенты', icon: '👤', roles: ['admin', 'receiver', 'manager'] },
-  { href: '/locations', label: 'Точки', icon: '🏢', roles: ['admin', 'manager'] },
-  { href: '/users', label: 'Пользователи', icon: '⚙️', roles: ['admin'] },
+  { href: '/dashboard',  label: 'Дашборд',       icon: '📊', roles: [] },
+  { href: '/orders',     label: 'Заказы',         icon: '🔧', roles: [] },
+  { href: '/clients',    label: 'Клиенты',        icon: '👤', roles: ['admin', 'receiver', 'manager'] },
+  { href: '/locations',  label: 'Точки',          icon: '🏢', roles: ['admin', 'manager'] },
+  { href: '/audit',      label: 'Аудит',          icon: '📋', roles: ['admin'] },
+  { href: '/users',      label: 'Пользователи',   icon: '⚙️', roles: ['admin'] },
 ];
 
 export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }) {
