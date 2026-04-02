@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import QRCode from 'react-qr-code';
@@ -16,7 +16,7 @@ const STATUS_ICONS: Record<string, string> = {
   in_progress: '🔧', ready: '✅', issued: '📤', cancelled: '❌',
 };
 
-export default function OrdersPage() {
+function OrdersInner() {
   const searchParams = useSearchParams();
   const [orders, setOrders] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -186,5 +186,17 @@ export default function OrdersPage() {
         </div>
       )}
     </AppLayout>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={
+      <AppLayout>
+        <div className="flex justify-center py-20"><Spinner size="lg" /></div>
+      </AppLayout>
+    }>
+      <OrdersInner />
+    </Suspense>
   );
 }
