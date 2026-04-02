@@ -286,6 +286,8 @@ model File {
   originalName  String         @map("original_name")
   mimeType      String         @map("mime_type")
   fileSize      Int            @map("file_size")
+  comment       String?
+  stage         String?
   uploadedBy    String         @map("uploaded_by")
   createdAt     DateTime       @default(now()) @map("created_at")
 

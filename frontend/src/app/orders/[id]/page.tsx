@@ -8,7 +8,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import Alert from '@/components/ui/Alert';
 import Spinner from '@/components/ui/Spinner';
 import OrderPhotos from '@/components/ui/OrderPhotos';
-import { ordersApi } from '@/lib/api';
+import { ordersApi, usersApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { formatDate, STATUS_LABELS, STATUS_TRANSITIONS, DEVICE_TYPE_LABELS } from '@/lib/helpers';
 
@@ -27,6 +27,9 @@ export default function OrderDetailPage() {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [targetStatus, setTargetStatus] = useState('');
   const [success, setSuccess] = useState('');
+  const [masters, setMasters] = useState<any[]>([]);
+  const [assigningMaster, setAssigningMaster] = useState(false);
+  const [selectedMaster, setSelectedMaster] = useState<string>('');
 
   async function load() {
     try {
@@ -40,6 +43,14 @@ export default function OrderDetailPage() {
   }
 
   useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    usersApi.list().then(u => setMasters(u.filter((x: any) =>
+      x.roles?.includes('master') || x.roles?.includes('admin') || x.roles?.includes('receiver')
+    ))).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (order) setSelectedMaster(order.masterUserId ?? '');
+  }, [order]);
 
   async function handleStatusChange(toStatus: string) {
     setChangingStatus(true);
@@ -87,8 +98,21 @@ export default function OrderDetailPage() {
     }
   }
 
-  async function openReceipt(docId: string) {
+  async function handleAssignMaster() {
+    setAssigningMaster(true);
+    setError('');
     try {
+      await ordersApi.assignMaster(id, selectedMaster || null);
+      setSuccess(selectedMaster ? 'Мастер назначен' : 'Мастер снят с заказа');
+      await load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setAssigningMaster(false);
+    }
+  }
+
+  async function openReceipt(docId: string) {    try {
       const token = localStorage.getItem('sc_token');
       const res = await fetch(`/api/documents/${docId}/view`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -237,12 +261,38 @@ export default function OrderDetailPage() {
               <h2 className="text-base font-semibold text-gray-700 mb-3">📋 Детали</h2>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-gray-400">Приёмщик</span><span>{order.receiverUser?.login}</span></div>
-                <div className="flex justify-between"><span className="text-gray-400">Мастер</span><span>{order.masterUser?.login ?? '—'}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Мастер</span><span className="font-medium text-blue-700">{order.masterUser?.login ?? '—'}</span></div>
                 {order.estimatedPrice && <div className="flex justify-between"><span className="text-gray-400">Стоимость</span><span className="font-medium">{Number(order.estimatedPrice).toLocaleString('ru-RU')} ₽</span></div>}
                 {order.estimatedReadyAt && <div className="flex justify-between"><span className="text-gray-400">Срок</span><span>{formatDate(order.estimatedReadyAt)}</span></div>}
                 {order.issuedAt && <div className="flex justify-between"><span className="text-gray-400">Выдан</span><span>{formatDate(order.issuedAt)}</span></div>}
               </div>
             </div>
+
+            {/* Назначить мастера */}
+            {(hasRole('admin') || hasRole('receiver')) && order.status !== 'issued' && order.status !== 'cancelled' && (
+              <div className="card p-5">
+                <h2 className="text-base font-semibold text-gray-700 mb-3">👨‍🔧 Назначить мастера</h2>
+                <select
+                  className="input mb-2"
+                  value={selectedMaster}
+                  onChange={e => setSelectedMaster(e.target.value)}
+                >
+                  <option value="">— без мастера —</option>
+                  {masters.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.login} ({(m.roles || []).join(', ')})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleAssignMaster}
+                  disabled={assigningMaster || selectedMaster === (order.masterUserId ?? '')}
+                  className="btn-primary btn-sm w-full justify-center"
+                >
+                  {assigningMaster ? 'Сохранение…' : '✓ Сохранить'}
+                </button>
+              </div>
+            )}
 
             {/* История статусов */}
             <div className="card p-5">

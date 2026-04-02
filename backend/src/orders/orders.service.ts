@@ -304,9 +304,9 @@ export class OrdersService {
         mimeType: file.mimetype,
         fileSize: file.size,
         uploadedBy: user.id,
-        comment: comment ?? null,
-        stage: stage ?? null,
-      } as any,
+        comment: comment || null,
+        stage: stage || null,
+      },
     });
   }
 
@@ -314,6 +314,36 @@ export class OrdersService {
     const photo = await this.prisma.file.findUnique({ where: { id: photoId } });
     if (!photo) throw new NotFoundException('Photo not found');
     return this.prisma.file.delete({ where: { id: photoId } });
+  }
+
+  async assignMaster(orderId: string, masterUserId: string | null, user: any) {
+    const order = await this.prisma.repairOrder.findFirst({
+      where: { id: orderId, deletedAt: null },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const updated = await this.prisma.repairOrder.update({
+      where: { id: orderId },
+      data: { masterUserId: masterUserId || null },
+      include: {
+        masterUser: { select: { id: true, login: true } },
+      },
+    });
+
+    // Логируем смену мастера в историю
+    await this.prisma.repairOrderStatusHistory.create({
+      data: {
+        orderId,
+        fromStatus: order.status as any,
+        toStatus: order.status as any,
+        changedBy: user.id,
+        comment: masterUserId
+          ? `Назначен мастер: ${updated.masterUser?.login ?? masterUserId}`
+          : 'Мастер снят с заказа',
+      },
+    });
+
+    return updated;
   }
 
   async transferOrder(orderId: string, toLocationId: string, comment: string, user: any) {

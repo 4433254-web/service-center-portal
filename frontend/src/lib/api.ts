@@ -70,6 +70,8 @@ export const ordersApi = {
   deletePhoto: (orderId: string, photoId: string) => api.del<any>(`/orders/${orderId}/photos/${photoId}`),
   transfer: (id: string, toLocationId: string, comment?: string) =>
     api.post<any>(`/orders/${id}/transfer`, { toLocationId, comment }),
+  assignMaster: (id: string, masterUserId: string | null) =>
+    api.patch<any>(`/orders/${id}/master`, { masterUserId }),
 };
 
 export const clientsApi = {

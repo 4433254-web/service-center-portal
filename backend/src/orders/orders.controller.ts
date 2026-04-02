@@ -143,4 +143,14 @@ export class OrdersController {
   ) {
     return this.ordersService.transferOrder(id, toLocationId, comment, user);
   }
+
+  @Patch(':id/master')
+  @Roles('admin', 'receiver')
+  assignMaster(
+    @Param('id') id: string,
+    @Body('masterUserId') masterUserId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.assignMaster(id, masterUserId, user);
+  }
 }
