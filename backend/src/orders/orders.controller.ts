@@ -85,6 +85,12 @@ export class OrdersController {
     return this.documentsService.generateReceipt(id, user);
   }
 
+  @Post(':id/documents/issue')
+  @Roles('admin', 'receiver')
+  generateIssueReceipt(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.documentsService.generateIssueReceipt(id, user);
+  }
+
   @Get(':id/files')
   @Roles('admin', 'receiver', 'manager', 'master')
   getFiles(@Param('id') id: string) {

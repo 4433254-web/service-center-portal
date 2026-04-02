@@ -58,6 +58,7 @@ export const ordersApi = {
   addComment: (id: string, commentText: string, isInternal?: boolean) => api.post<any>(`/orders/${id}/comments`, { commentText, isInternal }),
   documents: (id: string) => api.get<any[]>(`/orders/${id}/documents`),
   generateReceipt: (id: string) => api.post<any>(`/orders/${id}/documents/receipt`),
+  generateIssueReceipt: (id: string) => api.post<any>(`/orders/${id}/documents/issue`),
   files: (id: string) => api.get<any[]>(`/orders/${id}/files`),
   photos: (id: string) => api.get<any[]>(`/orders/${id}/photos`),
   uploadPhoto: (id: string, file: File, comment: string, stage: string) => {

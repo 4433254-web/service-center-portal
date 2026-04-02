@@ -46,6 +46,7 @@ enum FileEntityType {
 
 enum DocumentType {
   receipt
+  issue_receipt
   act
   warranty
 }
@@ -73,6 +74,7 @@ model User {
   generatedDocuments   Document[]
   auditLogs            AuditLog[]
   createdLocations     ServiceLocation[]
+  orderParts           OrderPart[]  @relation("OrderPartUser")
 
   @@map("users")
 }
@@ -212,6 +214,9 @@ model RepairOrder {
   estimatedReadyAt      DateTime?   @map("estimated_ready_at")
   receiverComment       String?     @map("receiver_comment")
   masterComment         String?     @map("master_comment")
+  partsCost             Decimal     @default(0) @db.Decimal(10, 2) @map("parts_cost")
+  laborCost             Decimal?    @db.Decimal(10, 2) @map("labor_cost")
+  finalPrice            Decimal?    @db.Decimal(10, 2) @map("final_price")
   issuedAt              DateTime?   @map("issued_at")
   issuedBy              String?     @map("issued_by")
   createdAt             DateTime    @default(now()) @map("created_at")
@@ -229,6 +234,7 @@ model RepairOrder {
   statusHistory RepairOrderStatusHistory[]
   comments      OrderComment[]
   documents     Document[]
+  parts         OrderPart[]
 
   @@index([clientId])
   @@index([deviceId])
@@ -298,6 +304,24 @@ model File {
   @@index([entityType, entityId])
   @@index([uploadedBy])
   @@map("files")
+}
+
+model OrderPart {
+  id        String   @id @default(uuid())
+  orderId   String   @map("order_id")
+  name      String
+  quantity  Int      @default(1)
+  price     Decimal  @db.Decimal(10, 2)
+  note      String?
+  addedBy   String   @map("added_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  order RepairOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user  User        @relation("OrderPartUser", fields: [addedBy], references: [id])
+
+  @@index([orderId])
+  @@map("order_parts")
 }
 
 model Document {

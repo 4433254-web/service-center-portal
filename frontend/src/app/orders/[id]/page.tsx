@@ -8,6 +8,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import Alert from '@/components/ui/Alert';
 import Spinner from '@/components/ui/Spinner';
 import OrderPhotos from '@/components/ui/OrderPhotos';
+import OrderPricing from '@/components/ui/OrderPricing';
 import { ordersApi, usersApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { formatDate, STATUS_LABELS, STATUS_TRANSITIONS, DEVICE_TYPE_LABELS } from '@/lib/helpers';
@@ -23,6 +24,7 @@ export default function OrderDetailPage() {
   const [addingComment, setAddingComment] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [generatingIssue, setGeneratingIssue] = useState(false);
   const [statusComment, setStatusComment] = useState('');
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [targetStatus, setTargetStatus] = useState('');
@@ -110,6 +112,17 @@ export default function OrderDetailPage() {
     } finally {
       setAssigningMaster(false);
     }
+  }
+
+  async function handleGenerateIssueReceipt() {
+    setGeneratingIssue(true); setError('');
+    try {
+      const doc = await ordersApi.generateIssueReceipt(id);
+      setSuccess('Квитанция выдачи сформирована');
+      await openReceipt(doc.id);
+      await load();
+    } catch (e: any) { setError(e.message); }
+    finally { setGeneratingIssue(false); }
   }
 
   async function openReceipt(docId: string) {    try {
@@ -294,6 +307,9 @@ export default function OrderDetailPage() {
               </div>
             )}
 
+            {/* Стоимость и запчасти */}
+            <OrderPricing orderId={id} order={order} onUpdate={load} />
+
             {/* История статусов */}
             <div className="card p-5">
               <h2 className="text-base font-semibold text-gray-700 mb-3">📅 История</h2>
@@ -317,16 +333,31 @@ export default function OrderDetailPage() {
             {/* Документы */}
             <div className="card p-5">
               <h2 className="text-base font-semibold text-gray-700 mb-3">📄 Документы</h2>
+              <div className="space-y-2 mb-3">
+                <button onClick={handleGenerateReceipt} disabled={generatingPdf}
+                  className="btn-secondary w-full justify-center btn-sm">
+                  {generatingPdf ? 'Формируем…' : '🖨 Квитанция приёма (A6)'}
+                </button>
+                {(order.status === 'issued' || order.status === 'ready') && (hasRole('admin') || hasRole('receiver')) && (
+                  <button onClick={handleGenerateIssueReceipt} disabled={generatingIssue}
+                    className="btn-secondary w-full justify-center btn-sm !border-green-200 !text-green-700 hover:!bg-green-50">
+                    {generatingIssue ? 'Формируем…' : '📤 Квитанция выдачи (A6)'}
+                  </button>
+                )}
+              </div>
               {(order.documents ?? []).map((d: any) => (
                 <button key={d.id} onClick={() => openReceipt(d.id)}
-                  className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 text-sm text-blue-600 hover:underline w-full text-left">
-                  📄 Квитанция · {formatDate(d.createdAt)}
+                  className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 w-full text-left">
+                  <span>{d.documentType === 'issue_receipt' ? '📤' : '📥'}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-blue-600 text-sm">
+                      {d.documentType === 'issue_receipt' ? 'Квитанция выдачи' : 'Квитанция приёма'}
+                    </div>
+                    <div className="text-xs text-gray-400">{formatDate(d.createdAt)}</div>
+                  </div>
                 </button>
               ))}
-              {!(order.documents?.length) && <p className="text-gray-400 text-sm">Нет документов</p>}
-              <button onClick={handleGenerateReceipt} disabled={generatingPdf} className="btn-secondary w-full justify-center mt-3 btn-sm">
-                {generatingPdf ? 'Формируем…' : '+ Сформировать квитанцию'}
-              </button>
+              {!(order.documents?.length) && <p className="text-gray-400 text-sm text-center py-1">Нет документов</p>}
             </div>
 
             {/* QR-код заказа */}
