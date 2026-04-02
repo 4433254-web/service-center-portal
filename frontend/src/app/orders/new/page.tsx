@@ -17,6 +17,7 @@ export default function NewOrderPage() {
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [newClient, setNewClient] = useState({ fullName: '', phone: '', email: '' });
   const [clientMode, setClientMode] = useState<'search' | 'new'>('search');
+  const [phoneWarning, setPhoneWarning] = useState('');
 
   const [deviceSearch, setDeviceSearch] = useState('');
   const [devices, setDevices] = useState<any[]>([]);
@@ -118,7 +119,15 @@ export default function NewOrderPage() {
             ) : (
               <div className="space-y-3">
                 <div><label className="label">ФИО *</label><input className="input" value={newClient.fullName} onChange={e => setNewClient(f=>({...f,fullName:e.target.value}))} placeholder="Иванов Иван Иванович" /></div>
-                <div><label className="label">Телефон *</label><input className="input" value={newClient.phone} onChange={e => setNewClient(f=>({...f,phone:e.target.value}))} placeholder="+79991234567" /></div>
+                <div><label className="label">Телефон *</label><input className="input" value={newClient.phone} onChange={async e => {
+                  setNewClient(f=>({...f,phone:e.target.value}));
+                  if (e.target.value.replace(/\D/g,'').length >= 10) {
+                    const res = await clientsApi.list({ search: e.target.value, limit: '3' });
+                    const found = res.items.find((c: any) => c.phone.replace(/\D/g,'') === e.target.value.replace(/\D/g,''));
+                    setPhoneWarning(found ? `⚠️ Клиент с таким телефоном уже есть: ${found.fullName}` : '');
+                  } else setPhoneWarning('');
+                }} placeholder="+79991234567" /></div>
+                {phoneWarning && <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{phoneWarning}</div>}
                 <div><label className="label">Email</label><input className="input" type="email" value={newClient.email} onChange={e => setNewClient(f=>({...f,email:e.target.value}))} /></div>
               </div>
             )}

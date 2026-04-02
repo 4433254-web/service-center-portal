@@ -1,11 +1,35 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
 export class ClientsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Нормализуем телефон для сравнения: только цифры */
+  private normalizePhone(phone: string): string {
+    return phone.replace(/\D/g, '');
+  }
+
+  async checkDuplicate(phone: string, excludeId?: string): Promise<any | null> {
+    const normalized = this.normalizePhone(phone);
+    const clients = await this.prisma.client.findMany({
+      where: { deletedAt: null },
+      select: { id: true, fullName: true, phone: true },
+    });
+    return clients.find(c =>
+      c.id !== excludeId && this.normalizePhone(c.phone) === normalized
+    ) ?? null;
+  }
+
   async create(data: any, user: any) {
+    // Проверка на дубль по телефону
+    const duplicate = await this.checkDuplicate(data.phone);
+    if (duplicate) {
+      throw new ConflictException(
+        `Клиент с таким телефоном уже существует: ${duplicate.fullName} (${duplicate.phone})`
+      );
+    }
+
     return this.prisma.client.create({
       data: {
         clientType: data.clientType ?? 'individual',

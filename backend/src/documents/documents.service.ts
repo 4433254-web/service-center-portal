@@ -85,24 +85,105 @@ export class DocumentsService {
   private buildReceiptHtml(order: any, qrSvg: string, orderUrl: string): string {
     const formatDate = (d: Date | string | null) => {
       if (!d) return '—';
-      return new Date(d).toLocaleString('ru-RU');
+      return new Date(d).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
-
+    const formatDateShort = (d: Date | string | null) => {
+      if (!d) return '—';
+      return new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
     const formatPrice = (p: any) => {
-      if (!p) return '—';
-      return `${Number(p).toFixed(2)} руб.`;
+      if (!p) return 'По результатам диагностики';
+      return `${Number(p).toLocaleString('ru-RU')} руб.`;
+    };
+    const deviceTypeMap: Record<string, string> = {
+      phone: 'Телефон', tablet: 'Планшет', laptop: 'Ноутбук', pc: 'Компьютер', other: 'Другое',
+    };
+    const statusMap: Record<string, string> = {
+      accepted: 'Принят', in_diagnostics: 'На диагностике',
+      waiting_approval: 'Ожидание согласования', in_progress: 'В работе',
+      ready: 'Готов', issued: 'Выдан', cancelled: 'Отменён', new: 'Новый',
     };
 
-    const statusMap: Record<string, string> = {
-      accepted: 'Принят',
-      in_diagnostics: 'На диагностике',
-      waiting_approval: 'Ожидание согласования',
-      in_progress: 'В работе',
-      ready: 'Готов',
-      issued: 'Выдан',
-      cancelled: 'Отменён',
-      new: 'Новый',
-    };
+    const copy = (label: string) => `
+    <div class="page">
+      <div class="header">
+        <div class="header-left">
+          <div class="company-name">Сервисный центр</div>
+          <div class="company-info">Ремонт телефонов, планшетов, компьютеров</div>
+        </div>
+        <div class="header-right">
+          <div class="qr-wrap">${qrSvg}<div class="qr-label">Открыть заказ</div></div>
+        </div>
+      </div>
+
+      <div class="doc-title">КВИТАНЦИЯ О ПРИЁМЕ УСТРОЙСТВА В РЕМОНТ</div>
+      <div class="copy-label">${label}</div>
+
+      <div class="grid2">
+        <div class="block">
+          <div class="block-title">📋 Заказ</div>
+          <div class="row"><span class="lbl">Номер заказа</span><span class="val bold mono">${order.orderNumber}</span></div>
+          <div class="row"><span class="lbl">Дата приёма</span><span class="val">${formatDate(order.createdAt)}</span></div>
+          <div class="row"><span class="lbl">Статус</span><span class="val">${statusMap[order.status] ?? order.status}</span></div>
+          <div class="row"><span class="lbl">Приёмщик</span><span class="val">${order.receiverUser?.login ?? '—'}</span></div>
+          ${order.masterUser ? `<div class="row"><span class="lbl">Мастер</span><span class="val">${order.masterUser.login}</span></div>` : ''}
+        </div>
+        <div class="block">
+          <div class="block-title">👤 Клиент</div>
+          <div class="row"><span class="lbl">ФИО / Организация</span><span class="val bold">${order.client?.fullName ?? '—'}</span></div>
+          <div class="row"><span class="lbl">Телефон</span><span class="val">${order.client?.phone ?? '—'}</span></div>
+          ${order.client?.phoneExtra ? `<div class="row"><span class="lbl">Доп. телефон</span><span class="val">${order.client.phoneExtra}</span></div>` : ''}
+          ${order.client?.email ? `<div class="row"><span class="lbl">Email</span><span class="val">${order.client.email}</span></div>` : ''}
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-title">📱 Устройство</div>
+        <div class="grid3">
+          <div class="row"><span class="lbl">Тип</span><span class="val">${deviceTypeMap[order.device?.deviceType] ?? order.device?.deviceType ?? '—'}</span></div>
+          <div class="row"><span class="lbl">Бренд</span><span class="val bold">${order.device?.brand ?? '—'}</span></div>
+          <div class="row"><span class="lbl">Модель</span><span class="val bold">${order.device?.model ?? '—'}</span></div>
+          ${order.device?.modification ? `<div class="row"><span class="lbl">Модификация</span><span class="val">${order.device.modification}</span></div>` : ''}
+          ${order.device?.color ? `<div class="row"><span class="lbl">Цвет</span><span class="val">${order.device.color}</span></div>` : ''}
+          ${order.device?.imei ? `<div class="row"><span class="lbl">IMEI</span><span class="val mono">${order.device.imei}</span></div>` : ''}
+          ${order.device?.serialNumber ? `<div class="row"><span class="lbl">Серийный №</span><span class="val mono">${order.device.serialNumber}</span></div>` : ''}
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-title">🔧 Неисправность и состояние</div>
+        <div class="row-full"><span class="lbl">Заявленная неисправность</span><div class="val-text">${order.issueDescription ?? '—'}</div></div>
+        <div class="row-full"><span class="lbl">Внешнее состояние при приёме</span><div class="val-text">${order.conditionAtAcceptance ?? '—'}</div></div>
+        <div class="row-full"><span class="lbl">Комплектация / переданные предметы</span><div class="val-text">${order.includedItems || '—'}</div></div>
+      </div>
+
+      <div class="block conditions">
+        <div class="block-title">💰 Предварительные условия</div>
+        <div class="grid2-inner">
+          <div class="row"><span class="lbl">Предварительная стоимость</span><span class="val bold price">${formatPrice(order.estimatedPrice)}</span></div>
+          <div class="row"><span class="lbl">Предв. срок готовности</span><span class="val">${order.estimatedReadyAt ? formatDateShort(order.estimatedReadyAt) : 'По результатам диагностики'}</span></div>
+        </div>
+        ${order.receiverComment ? `<div class="row-full"><span class="lbl">Примечание</span><div class="val-text">${order.receiverComment}</div></div>` : ''}
+      </div>
+
+      <div class="signatures">
+        <div class="sig-block">
+          <div class="sig-name">Клиент: <span>${order.client?.fullName ?? '________________'}</span></div>
+          <div class="sig-line"></div>
+          <div class="sig-hint">подпись / дата</div>
+        </div>
+        <div class="sig-block">
+          <div class="sig-name">Сотрудник: <span>${order.receiverUser?.login ?? '________________'}</span></div>
+          <div class="sig-line"></div>
+          <div class="sig-hint">подпись / дата</div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>Документ сформирован: ${formatDate(new Date())}</div>
+        <div class="footer-url">${orderUrl}</div>
+      </div>
+    </div>`;
 
     return `<!DOCTYPE html>
 <html lang="ru">
@@ -110,100 +191,51 @@ export class DocumentsService {
   <meta charset="UTF-8">
   <title>Квитанция ${order.orderNumber}</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 12pt; color: #000; background: #fff; padding: 20px; }
-    .page { max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #ccc; }
-    h1 { font-size: 18pt; text-align: center; margin-bottom: 4px; }
-    .subtitle { text-align: center; font-size: 10pt; color: #666; margin-bottom: 16px; }
-    .doc-title { font-size: 14pt; font-weight: bold; text-align: center; margin: 16px 0; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 8px; }
-    .section { margin: 12px 0; }
-    .section-title { font-weight: bold; font-size: 11pt; border-bottom: 1px solid #999; padding-bottom: 4px; margin-bottom: 8px; }
-    table { width: 100%; border-collapse: collapse; }
-    td { padding: 4px 8px; vertical-align: top; }
-    td:first-child { font-weight: bold; width: 40%; color: #333; }
-    .signatures { margin-top: 32px; display: flex; justify-content: space-between; }
-    .sig-block { width: 45%; }
-    .sig-line { border-top: 1px solid #000; margin-top: 40px; text-align: center; font-size: 9pt; color: #666; padding-top: 4px; }
-    .footer { margin-top: 24px; font-size: 9pt; color: #666; text-align: center; border-top: 1px solid #ccc; padding-top: 8px; }
-    .qr-block { float: right; margin: 0 0 8px 16px; text-align: center; }
-    .qr-block svg { display: block; }
-    .qr-label { font-size: 8pt; color: #666; margin-top: 4px; }
-    @media print { body { padding: 0; } .page { border: none; } }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Arial',sans-serif;font-size:11pt;color:#111;background:#f0f0f0;padding:12px}
+    .page{max-width:780px;margin:0 auto 20px;background:#fff;padding:24px 28px;border:1px solid #ddd;border-radius:4px;page-break-after:always}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #1a3a6b;padding-bottom:12px;margin-bottom:14px}
+    .company-name{font-size:18pt;font-weight:bold;color:#1a3a6b;letter-spacing:-0.5px}
+    .company-info{font-size:9pt;color:#666;margin-top:3px}
+    .qr-wrap{text-align:center}
+    .qr-wrap svg{width:90px;height:90px;display:block}
+    .qr-label{font-size:7.5pt;color:#888;margin-top:2px;text-align:center}
+    .doc-title{text-align:center;font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 4px;color:#1a3a6b}
+    .copy-label{text-align:center;font-size:8.5pt;color:#999;margin-bottom:14px;font-style:italic}
+    .block{background:#f9f9fb;border:1px solid #e8e8ed;border-radius:4px;padding:10px 14px;margin-bottom:10px}
+    .block-title{font-size:9pt;font-weight:bold;color:#1a3a6b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;border-bottom:1px solid #dde;padding-bottom:4px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+    .grid2-inner{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+    .row{display:flex;flex-direction:column;margin-bottom:5px}
+    .row-full{margin-bottom:6px}
+    .lbl{font-size:8pt;color:#888;font-weight:normal}
+    .val{font-size:10pt;color:#111;margin-top:1px}
+    .val-text{font-size:10pt;color:#111;margin-top:2px;padding:4px 6px;background:#fff;border:1px solid #e0e0e0;border-radius:3px;min-height:22px}
+    .bold{font-weight:bold}
+    .mono{font-family:monospace;font-size:9.5pt;letter-spacing:0.3px}
+    .price{font-size:12pt;color:#1a3a6b}
+    .conditions{border-left:3px solid #1a3a6b}
+    .signatures{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin:18px 0 14px}
+    .sig-name{font-size:9pt;color:#555;margin-bottom:6px}
+    .sig-name span{font-weight:bold;color:#111}
+    .sig-line{border-bottom:1px solid #333;margin:32px 0 4px}
+    .sig-hint{font-size:7.5pt;color:#aaa;text-align:center}
+    .footer{border-top:1px solid #ddd;padding-top:8px;font-size:7.5pt;color:#aaa;text-align:center}
+    .footer-url{font-size:7pt;color:#bbb;margin-top:2px;font-family:monospace}
+    .divider{border:none;border-top:2px dashed #ccc;margin:8px 0 20px;display:block}
+    @media print{
+      body{background:#fff;padding:0}
+      .page{border:none;border-radius:0;padding:16px;margin:0;box-shadow:none;page-break-after:always}
+      .page:last-child{page-break-after:avoid}
+      .block{break-inside:avoid}
+    }
   </style>
 </head>
 <body>
-  <div class="page">
-    <h1>Сервисный центр</h1>
-    <div class="subtitle">Ремонт телефонов, планшетов, компьютеров</div>
-
-    <div class="doc-title">КВИТАНЦИЯ О ПРИЁМЕ УСТРОЙСТВА В РЕМОНТ</div>
-
-    <div class="section">
-      <div class="qr-block">
-        ${qrSvg}
-        <div class="qr-label">Сканируйте для открытия заказа</div>
-      </div>
-      <div class="section-title">Заказ</div>
-      <table>
-        <tr><td>Номер заказа:</td><td><strong>${order.orderNumber}</strong></td></tr>
-        <tr><td>Дата и время приёма:</td><td>${formatDate(order.createdAt)}</td></tr>
-        <tr><td>Статус:</td><td>${statusMap[order.status] ?? order.status}</td></tr>
-      </table>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Клиент</div>
-      <table>
-        <tr><td>ФИО / Организация:</td><td>${order.client?.fullName ?? '—'}</td></tr>
-        <tr><td>Телефон:</td><td>${order.client?.phone ?? '—'}</td></tr>
-        ${order.client?.phoneExtra ? `<tr><td>Доп. телефон:</td><td>${order.client.phoneExtra}</td></tr>` : ''}
-      </table>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Устройство</div>
-      <table>
-        <tr><td>Тип:</td><td>${order.device?.deviceType ?? '—'}</td></tr>
-        <tr><td>Бренд:</td><td>${order.device?.brand ?? '—'}</td></tr>
-        <tr><td>Модель:</td><td>${order.device?.model ?? '—'}</td></tr>
-        ${order.device?.modification ? `<tr><td>Модификация:</td><td>${order.device.modification}</td></tr>` : ''}
-        ${order.device?.color ? `<tr><td>Цвет:</td><td>${order.device.color}</td></tr>` : ''}
-        ${order.device?.imei ? `<tr><td>IMEI:</td><td>${order.device.imei}</td></tr>` : ''}
-        ${order.device?.serialNumber ? `<tr><td>Серийный номер:</td><td>${order.device.serialNumber}</td></tr>` : ''}
-      </table>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Неисправность и состояние</div>
-      <table>
-        <tr><td>Заявленная неисправность:</td><td>${order.issueDescription ?? '—'}</td></tr>
-        <tr><td>Состояние при приёме:</td><td>${order.conditionAtAcceptance ?? '—'}</td></tr>
-        <tr><td>Комплектация:</td><td>${order.includedItems ?? '—'}</td></tr>
-      </table>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Предварительные условия</div>
-      <table>
-        <tr><td>Предварительная стоимость:</td><td>${formatPrice(order.estimatedPrice)}</td></tr>
-        <tr><td>Предв. срок готовности:</td><td>${formatDate(order.estimatedReadyAt)}</td></tr>
-      </table>
-    </div>
-
-    <div class="signatures">
-      <div class="sig-block">
-        <div class="sig-line">Подпись клиента</div>
-      </div>
-      <div class="sig-block">
-        <div class="sig-line">Подпись сотрудника (${order.receiverUser?.login ?? '—'})</div>
-      </div>
-    </div>
-
-    <div class="footer">
-      Документ сформирован: ${formatDate(new Date())}<br/>
-      <span style="font-size:8pt;color:#999">${orderUrl}</span>
-    </div>
-  </div>
+  ${copy('Экземпляр для клиента')}
+  <hr class="divider no-print">
+  ${copy('Экземпляр для сервисного центра')}
 </body>
 </html>`;
   }
