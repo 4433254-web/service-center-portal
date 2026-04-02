@@ -125,15 +125,29 @@ export default function OrderDetailPage() {
     finally { setGeneratingIssue(false); }
   }
 
-  async function openReceipt(docId: string) {    try {
+  async function openReceipt(docId: string) {
+    try {
       const token = localStorage.getItem('sc_token');
       const res = await fetch(`/api/documents/${docId}/view`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (!res.ok) throw new Error('Не удалось загрузить квитанцию');
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Ошибка загрузки квитанции (${res.status})${body ? ': ' + body.slice(0, 120) : ''}`);
+      }
       const html = await res.text();
-      const win = window.open('', '_blank');
-      if (win) { win.document.write(html); win.document.close(); win.focus(); win.print(); }
+      // Создаём Blob URL — работает даже когда браузер блокирует popup
+      const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, '_blank');
+      if (!win) {
+        // Попап заблокирован — открываем через ссылку
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel = 'noopener';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      }
+      // Освобождаем Blob после использования
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e: any) {
       setError(e.message);
     }
