@@ -13,6 +13,8 @@ export class DocumentsController {
   getOne(@Param('id') id: string) {
     return this.documentsService.getDocument(id);
   }
+
+  @Get(':id/view')
   @Roles('admin', 'receiver', 'manager', 'master')
   async view(@Param('id') id: string, @Res() res: Response) {
     const { html } = await this.documentsService.viewDocument(id);
