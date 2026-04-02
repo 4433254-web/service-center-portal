@@ -35,3 +35,6 @@ Thumbs.db
 
 # Prisma
 backend/prisma/fix-passwords.ts
+
+_unzip_mvp/
+_unzip_mvp1/
